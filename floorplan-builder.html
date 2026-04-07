@@ -181,6 +181,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
     <button class="btn secondary" id="apiStatusBtn" onclick="showApiStatus()">Server API</button>
     <button class="btn secondary" id="renderViewsBtn" onclick="renderFourViews()">Render 4 Views</button>
     <button class="btn secondary" id="roomMoveBtn" onclick="toggleRoomMoveMode()">Move Room</button>
+    <button class="btn secondary" onclick="saveFloorplan()">Save Plan</button>
+    <button class="btn secondary" onclick="openFloorplanFile()">Open Plan</button>
     <button class="btn secondary" onclick="clearCanvas()">Clear</button>
     <button class="btn secondary" onclick="exportPNG()">Export PNG</button>
   </div>
@@ -227,6 +229,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 </div>
 
 <div class="tooltip" id="tooltip"></div>
+<input type="file" id="floorplanFileInput" accept=".floorcraft,.json,application/json" style="display:none"/>
 
 <script>
 // ── Constants ──
@@ -236,6 +239,7 @@ const SCALE_LABEL = '1 cell = 1 ft';
 const DEFAULT_GRID_WIDTH = 60;
 const DEFAULT_GRID_HEIGHT = 40;
 const DEFAULT_ZOOM = 100;
+const FLOORPLAN_FILE_VERSION = 1;
 const API_CONFIG_URL = '/api/config';
 const API_FLOORPLAN_URL = '/api/generate-floorplan';
 const API_RENDER_VIEW_URL = '/api/render-view';
@@ -1177,11 +1181,96 @@ function clearCanvas() {
   items.forEach(i => { const el = document.getElementById('item-'+i.id); if(el) el.remove(); });
   items = [];
   selectedId = null;
+  idCounter = 0;
   groupSelectionIds = [];
   updateGroupOutline();
   updateEmptyInspector();
   resetRenderedViews();
   closeRenderPanel();
+}
+
+function buildFloorplanSnapshot() {
+  return {
+    app: 'FloorCraft',
+    version: FLOORPLAN_FILE_VERSION,
+    savedAt: new Date().toISOString(),
+    prompt: document.getElementById('promptInput').value.trim(),
+    gridWidth,
+    gridHeight,
+    zoomPercent,
+    items: items.map(item => ({
+      name: item.name,
+      type: item.type,
+      icon: item.icon,
+      desc: item.desc,
+      x: Math.round(item.x / CELL),
+      y: Math.round(item.y / CELL),
+      w: item.w,
+      h: item.h,
+      color: item.color,
+      z: item.z || 1
+    }))
+  };
+}
+
+function saveFloorplan() {
+  const snapshot = buildFloorplanSnapshot();
+  const stamp = snapshot.savedAt.slice(0, 10);
+  const filename = `floorcraft-plan-${stamp}.floorcraft`;
+  const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/x-floorcraft+json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function openFloorplanFile() {
+  const input = document.getElementById('floorplanFileInput');
+  input.value = '';
+  input.click();
+}
+
+function loadFloorplanSnapshot(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.items)) {
+    throw new Error('This file does not contain a valid FloorCraft plan.');
+  }
+
+  clearCanvas();
+  document.getElementById('promptInput').value = snapshot.prompt || '';
+  applyGridSize(
+    Number(snapshot.gridWidth) || DEFAULT_GRID_WIDTH,
+    Number(snapshot.gridHeight) || DEFAULT_GRID_HEIGHT
+  );
+  applyZoom(Number(snapshot.zoomPercent) || DEFAULT_ZOOM);
+
+  snapshot.items.forEach(rawItem => addItem({
+    ...rawItem,
+    x: Number(rawItem.x) * CELL,
+    y: Number(rawItem.y) * CELL
+  }));
+
+  selectedId = null;
+  renderAll();
+  updateEmptyInspector();
+}
+
+function readFloorplanFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const snapshot = JSON.parse(String(reader.result || ''));
+      loadFloorplanSnapshot(snapshot);
+    } catch (err) {
+      alert('Open plan failed.\n' + (err.message || 'Unable to read this file.'));
+    }
+  };
+  reader.onerror = () => {
+    alert('Open plan failed.\nThe selected file could not be read.');
+  };
+  reader.readAsText(file);
 }
 
 // ── Inspector ──
@@ -1363,6 +1452,10 @@ document.getElementById('gridHeightInput').addEventListener('change', ev => {
 
 document.getElementById('zoomInput').addEventListener('change', ev => {
   applyZoom(Number(ev.target.value) || DEFAULT_ZOOM);
+});
+
+document.getElementById('floorplanFileInput').addEventListener('change', ev => {
+  readFloorplanFile(ev.target.files && ev.target.files[0]);
 });
 
 document.addEventListener('keydown', ev => {

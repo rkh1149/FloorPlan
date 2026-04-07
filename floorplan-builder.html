@@ -61,7 +61,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .artifact-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 6px; cursor: grab; display: flex; flex-direction: column; align-items: center; gap: 5px; transition: border-color .15s, transform .1s; user-select: none; }
 .artifact-item:hover { border-color: var(--accent); transform: translateY(-1px); }
 .artifact-item:active { cursor: grabbing; }
-.artifact-icon { width: 36px; height: 36px; }
+.artifact-icon { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(239,230,214,.88)); border: 1px solid rgba(199,186,164,.9); box-shadow: 0 8px 16px rgba(122, 102, 74, .12); }
+.artifact-icon svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 3px rgba(70, 55, 35, .18)); }
 .artifact-name { font-size: 10px; color: var(--text2); text-align: center; line-height: 1.3; }
 .artifact-dims { font-size: 9px; color: var(--text3); }
 
@@ -69,16 +70,20 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .canvas-wrap { position: relative; overflow: auto; background: var(--bg); }
 #canvas { position: relative; min-width: 100%; min-height: 100%; overflow: hidden; cursor: default; }
 .grid-bg { position: absolute; inset: 0; pointer-events: none; }
-.floor-item { position: absolute; cursor: move; user-select: none; }
-.floor-item .item-body { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 3px; font-size: 9px; color: var(--text2); text-align: center; line-height: 1.2; transition: box-shadow .15s; position: relative; overflow: hidden; }
-.floor-item.selected .item-body { box-shadow: 0 0 0 2px var(--accent); }
+.floor-item { position: absolute; cursor: move; user-select: none; overflow: visible; }
+.floor-item .item-body { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 9px; color: var(--text2); text-align: center; line-height: 1.2; transition: transform .15s; position: relative; overflow: visible; padding: 2px; }
+.floor-item .item-icon { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,.38), rgba(255,255,255,0) 45%), linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0)); box-shadow: 0 10px 18px rgba(90, 72, 50, .12); }
+.floor-item .item-icon svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 3px rgba(61, 46, 29, .18)); }
+.floor-item.selected .item-icon { box-shadow: 0 0 0 2px var(--accent), 0 12px 22px rgba(90, 72, 50, .18); }
 .floor-item .resize-handle { position: absolute; bottom: 1px; right: 1px; width: 10px; height: 10px; cursor: se-resize; opacity: 0; transition: opacity .15s; }
 .floor-item:hover .resize-handle, .floor-item.selected .resize-handle { opacity: 1; }
 .resize-handle::after { content: ''; display: block; width: 6px; height: 6px; border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent); margin: 2px 0 0 2px; }
-.floor-item .item-label { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 8px; text-align: center; color: var(--text2); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.floor-item .item-meta { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); min-width: max-content; max-width: 160px; text-align: center; pointer-events: none; }
+.floor-item .item-name { font-size: 9px; line-height: 1.2; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 0 rgba(255,255,255,.85); }
+.floor-item .item-dims { font-size: 8px; line-height: 1.2; color: var(--text2); text-shadow: 0 1px 0 rgba(255,255,255,.85); }
 .delete-btn { position: absolute; top: -8px; right: -8px; width: 16px; height: 16px; background: var(--danger); border-radius: 50%; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #fff; opacity: 0; transition: opacity .15s; z-index: 10; }
 .floor-item.selected .delete-btn { opacity: 1; }
-.floor-item.grouped .item-body { box-shadow: inset 0 0 0 1px rgba(122, 158, 181, .95); }
+.floor-item.grouped .item-icon { box-shadow: 0 0 0 1px rgba(122, 158, 181, .95), 0 10px 18px rgba(90, 72, 50, .12); }
 #canvas.room-move-active { cursor: crosshair; }
 #canvas.room-move-active .resize-handle,
 #canvas.room-move-active .delete-btn { opacity: 0 !important; pointer-events: none; }
@@ -332,48 +337,74 @@ const CATALOG = {
   ],
 };
 
+const CATALOG_INDEX = Object.values(CATALOG).flat().reduce((index, entry) => {
+  [entry.id, entry.name, entry.icon].forEach(key => {
+    if (key) index[normalizeCatalogKey(key)] = entry;
+  });
+  return index;
+}, {});
+
+function normalizeCatalogKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function getCatalogEntry(...keys) {
+  for (const key of keys) {
+    const entry = CATALOG_INDEX[normalizeCatalogKey(key)];
+    if (entry) return entry;
+  }
+  return null;
+}
+
 // SVG icon generators (draw mini icons for each type)
 function makeIcon(type, color) {
-  const s = `<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">`;
+  const s = `<svg width="36" height="36" viewBox="0 0 36 36" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
   const e = `</svg>`;
   const c = color || '#555';
   const lite = lightenHex(c, 60);
+  const shade = darkenHex(c, 28);
+  const bright = lightenHex(c, 92);
   const icons = {
-    'wall-h':  `<rect x="2" y="15" width="32" height="6" rx="1" fill="${c}"/>`,
-    'wall-v':  `<rect x="15" y="2" width="6" height="32" rx="1" fill="${c}"/>`,
-    'ext-h':   `<rect x="2" y="13" width="32" height="10" rx="1" fill="${c}"/>`,
-    'ext-v':   `<rect x="13" y="2" width="10" height="32" rx="1" fill="${c}"/>`,
-    'door':    `<rect x="2" y="14" width="22" height="3" rx="1" fill="${c}"/><path d="M2 14 Q2 4 22 4" fill="none" stroke="${lite}" stroke-width="1" stroke-dasharray="2,2"/>`,
-    'window':  `<rect x="2" y="15" width="32" height="4" rx="1" fill="${c}"/><line x1="10" y1="15" x2="10" y2="19" stroke="${lite}" stroke-width="1"/><line x1="18" y1="15" x2="18" y2="19" stroke="${lite}" stroke-width="1"/><line x1="26" y1="15" x2="26" y2="19" stroke="${lite}" stroke-width="1"/>`,
-    'sliding': `<rect x="2" y="14" width="32" height="4" rx="1" fill="${c}"/><rect x="2" y="14" width="14" height="4" rx="1" fill="${lite}" opacity=".5"/>`,
-    'stairs':  `<rect x="4" y="4" width="28" height="28" rx="2" fill="none" stroke="${c}" stroke-width="1.5"/>${[0,1,2,3,4].map(i=>`<line x1="4" y1="${9+i*5}" x2="32" y2="${9+i*5}" stroke="${lite}" stroke-width="1"/>`).join('')}`,
-    'sofa':    `<rect x="2" y="12" width="32" height="18" rx="3" fill="${c}"/><rect x="2" y="8" width="32" height="8" rx="2" fill="${lite}"/><rect x="2" y="12" width="6" height="18" rx="2" fill="${lite}"/><rect x="28" y="12" width="6" height="18" rx="2" fill="${lite}"/>`,
-    'chair':   `<rect x="6" y="10" width="24" height="20" rx="3" fill="${c}"/><rect x="6" y="6" width="24" height="8" rx="2" fill="${lite}"/>`,
-    'ctable':  `<rect x="4" y="10" width="28" height="16" rx="3" fill="${c}"/><rect x="8" y="26" width="4" height="6" rx="1" fill="${lite}"/><rect x="24" y="26" width="4" height="6" rx="1" fill="${lite}"/>`,
-    'tv':      `<rect x="2" y="10" width="32" height="12" rx="2" fill="${c}"/><rect x="4" y="12" width="28" height="8" rx="1" fill="${lite}" opacity=".3"/><rect x="14" y="22" width="8" height="4" rx="1" fill="${c}"/>`,
-    'shelf':   `<rect x="2" y="14" width="32" height="10" rx="2" fill="${c}"/><line x1="11" y1="14" x2="11" y2="24" stroke="${lite}" stroke-width="1"/><line x1="22" y1="14" x2="22" y2="24" stroke="${lite}" stroke-width="1"/>`,
-    'fire':    `<rect x="4" y="14" width="28" height="14" rx="2" fill="${c}"/><path d="M12 20 Q18 10 24 20 Q20 16 18 22 Q16 16 12 20Z" fill="#c47a6a"/>`,
-    'qbed':    `<rect x="4" y="2" width="28" height="32" rx="3" fill="${c}"/><rect x="4" y="2" width="28" height="9" rx="2" fill="${lite}"/><rect x="7" y="14" width="10" height="10" rx="2" fill="${lite}" opacity=".5"/><rect x="19" y="14" width="10" height="10" rx="2" fill="${lite}" opacity=".5"/>`,
-    'kbed':    `<rect x="2" y="2" width="32" height="32" rx="3" fill="${c}"/><rect x="2" y="2" width="32" height="9" rx="2" fill="${lite}"/><rect x="5" y="14" width="12" height="10" rx="2" fill="${lite}" opacity=".5"/><rect x="19" y="14" width="12" height="10" rx="2" fill="${lite}" opacity=".5"/>`,
-    'tbed':    `<rect x="8" y="2" width="20" height="32" rx="3" fill="${c}"/><rect x="8" y="2" width="20" height="9" rx="2" fill="${lite}"/>`,
-    'dresser': `<rect x="4" y="8" width="28" height="22" rx="2" fill="${c}"/><line x1="4" y1="18" x2="32" y2="18" stroke="${lite}" stroke-width="1"/><circle cx="18" cy="14" r="2" fill="${lite}"/><circle cx="18" cy="22" r="2" fill="${lite}"/>`,
-    'ns':      `<rect x="6" y="8" width="24" height="22" rx="2" fill="${c}"/><circle cx="18" cy="19" r="4" fill="${lite}" opacity=".6"/>`,
-    'ward':    `<rect x="2" y="6" width="32" height="24" rx="2" fill="${c}"/><line x1="18" y1="6" x2="18" y2="30" stroke="${lite}" stroke-width="1"/><circle cx="15" cy="18" r="2" fill="${lite}"/><circle cx="21" cy="18" r="2" fill="${lite}"/>`,
-    'desk':    `<rect x="2" y="10" width="32" height="18" rx="2" fill="${c}"/><rect x="2" y="10" width="8" height="18" rx="2" fill="${lite}" opacity=".5"/>`,
-    'counter': `<rect x="2" y="12" width="32" height="16" rx="2" fill="${c}"/><rect x="2" y="12" width="32" height="5" rx="1" fill="${lite}" opacity=".5"/>`,
-    'island':  `<rect x="4" y="8" width="28" height="20" rx="3" fill="${c}"/><rect x="4" y="8" width="28" height="6" rx="2" fill="${lite}" opacity=".4"/>`,
-    'stove':   `<rect x="4" y="8" width="28" height="22" rx="2" fill="${c}"/><circle cx="13" cy="16" r="4" fill="${lite}" opacity=".7"/><circle cx="23" cy="16" r="4" fill="${lite}" opacity=".7"/><circle cx="13" cy="26" r="4" fill="${lite}" opacity=".7"/><circle cx="23" cy="26" r="4" fill="${lite}" opacity=".7"/>`,
-    'fridge':  `<rect x="6" y="4" width="24" height="28" rx="3" fill="${c}"/><line x1="6" y1="18" x2="30" y2="18" stroke="${lite}" stroke-width="1.5"/><rect x="22" y="9" width="4" height="6" rx="1" fill="${lite}"/><rect x="22" y="20" width="4" height="8" rx="1" fill="${lite}"/>`,
-    'dtable':  `<rect x="2" y="6" width="32" height="24" rx="2" fill="${c}"/><rect x="6" y="2" width="6" height="4" rx="1" fill="${lite}"/><rect x="24" y="2" width="6" height="4" rx="1" fill="${lite}"/><rect x="6" y="30" width="6" height="4" rx="1" fill="${lite}"/><rect x="24" y="30" width="6" height="4" rx="1" fill="${lite}"/>`,
-    'toilet':  `<rect x="8" y="4" width="20" height="12" rx="2" fill="${c}"/><ellipse cx="18" cy="24" rx="10" ry="10" fill="${c}"/><ellipse cx="18" cy="24" rx="7" ry="7" fill="${lite}" opacity=".3"/>`,
-    'sink':    `<rect x="4" y="8" width="28" height="22" rx="4" fill="${c}"/><ellipse cx="18" cy="20" rx="9" ry="8" fill="${lite}" opacity=".3"/><circle cx="18" cy="20" r="2" fill="${lite}"/>`,
-    'shower':  `<rect x="4" y="4" width="28" height="28" rx="3" fill="${c}"/><circle cx="28" cy="8" r="3" fill="${lite}"/><line x1="4" y1="30" x2="30" y2="4" stroke="${lite}" stroke-width="0.8" stroke-dasharray="3,3"/>`,
-    'bath':    `<rect x="2" y="8" width="32" height="20" rx="4" fill="${c}"/><ellipse cx="18" cy="18" rx="12" ry="7" fill="${lite}" opacity=".25"/><circle cx="6" cy="14" r="3" fill="${lite}" opacity=".7"/>`,
-    'dsink':   `<rect x="2" y="10" width="32" height="18" rx="3" fill="${c}"/><ellipse cx="12" cy="19" rx="7" ry="6" fill="${lite}" opacity=".3"/><ellipse cx="24" cy="19" rx="7" ry="6" fill="${lite}" opacity=".3"/>`,
-    'room':    `<rect x="2" y="2" width="32" height="32" rx="2" fill="none" stroke="${c}" stroke-width="2.5"/><rect x="6" y="30" width="8" height="4" rx="1" fill="${c}"/>`,
-    'closet':  `<rect x="4" y="4" width="28" height="28" rx="2" fill="${c}"/><line x1="18" y1="4" x2="18" y2="32" stroke="${lite}" stroke-width="1"/>`,
-    'laundry': `<rect x="4" y="4" width="28" height="28" rx="4" fill="${c}"/><circle cx="18" cy="18" rx="10" ry="10" fill="${lite}" opacity=".4"/><circle cx="18" cy="18" r="4" fill="${lite}" opacity=".3"/>`,
-    'plant':   `<circle cx="18" cy="22" r="10" fill="${c}"/><path d="M18 14 Q14 8 10 10 Q14 12 18 18 Q22 12 26 10 Q22 8 18 14Z" fill="${lite}"/>`,
+    'wall-h':  `<rect x="2" y="15" width="32" height="6" rx="1.5" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="3" y="16" width="30" height="1.5" rx="0.75" fill="${bright}" opacity=".45"/>`,
+    'wall-v':  `<rect x="15" y="2" width="6" height="32" rx="1.5" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="16" y="3" width="1.5" height="30" rx="0.75" fill="${bright}" opacity=".45"/>`,
+    'ext-h':   `<rect x="2" y="13" width="32" height="10" rx="2" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="3" y="14.5" width="30" height="2" rx="1" fill="${bright}" opacity=".4"/>`,
+    'ext-v':   `<rect x="13" y="2" width="10" height="32" rx="2" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="14.5" y="3" width="2" height="30" rx="1" fill="${bright}" opacity=".4"/>`,
+    'door':    `<rect x="2" y="14" width="22" height="3" rx="1" fill="${c}" stroke="${shade}" stroke-width=".8"/><path d="M2 14 Q2 4 22 4" fill="none" stroke="${lite}" stroke-width="1.4" stroke-dasharray="2,2"/><circle cx="18" cy="10" r="1.2" fill="${bright}"/>`,
+    'window':  `<rect x="2" y="15" width="32" height="4" rx="1.2" fill="${c}" stroke="${shade}" stroke-width=".8"/><rect x="4" y="13.5" width="28" height="7" rx="1.5" fill="${bright}" opacity=".28"/><line x1="10" y1="14" x2="10" y2="20" stroke="${lite}" stroke-width="1"/><line x1="18" y1="14" x2="18" y2="20" stroke="${lite}" stroke-width="1"/><line x1="26" y1="14" x2="26" y2="20" stroke="${lite}" stroke-width="1"/>`,
+    'sliding': `<rect x="2" y="14" width="32" height="5" rx="1.2" fill="${c}" stroke="${shade}" stroke-width=".8"/><rect x="3" y="13" width="15" height="7" rx="1.5" fill="${bright}" opacity=".34"/><rect x="18" y="13" width="15" height="7" rx="1.5" fill="${lite}" opacity=".18"/>`,
+    'stairs':  `<rect x="4" y="4" width="28" height="28" rx="3" fill="rgba(255,255,255,.28)" stroke="${shade}" stroke-width="1.5"/>${[0,1,2,3,4].map(i=>`<line x1="6" y1="${8+i*5}" x2="30" y2="${8+i*5}" stroke="${i % 2 === 0 ? lite : bright}" stroke-width="1.4"/>`).join('')}`,
+    'sofa':    `<rect x="2" y="12" width="32" height="18" rx="5" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="3.5" y="8" width="29" height="9" rx="3.5" fill="${lite}"/><rect x="2" y="12" width="6" height="18" rx="3" fill="${shade}"/><rect x="28" y="12" width="6" height="18" rx="3" fill="${shade}"/><rect x="7" y="18" width="22" height="8" rx="3" fill="${bright}" opacity=".18"/>`,
+    'chair':   `<rect x="6" y="10" width="24" height="20" rx="5" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="7" y="6" width="22" height="9" rx="3.5" fill="${lite}"/><rect x="10" y="16" width="16" height="9" rx="3" fill="${bright}" opacity=".18"/>`,
+    'ctable':  `<rect x="4" y="10" width="28" height="16" rx="4" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="6" y="12" width="24" height="5" rx="2.5" fill="${bright}" opacity=".24"/><rect x="8" y="26" width="4" height="6" rx="1" fill="${shade}"/><rect x="24" y="26" width="4" height="6" rx="1" fill="${shade}"/>`,
+    'tv':      `<rect x="2" y="10" width="32" height="12" rx="2.5" fill="${shade}" stroke="${bright}" stroke-width=".8"/><rect x="4" y="12" width="28" height="8" rx="1.5" fill="${lite}" opacity=".45"/><rect x="14" y="22" width="8" height="4" rx="1" fill="${c}"/>`,
+    'shelf':   `<rect x="2" y="14" width="32" height="10" rx="2.5" fill="${c}" stroke="${shade}" stroke-width="1"/><line x1="11" y1="14" x2="11" y2="24" stroke="${lite}" stroke-width="1.2"/><line x1="22" y1="14" x2="22" y2="24" stroke="${lite}" stroke-width="1.2"/><rect x="4" y="16" width="28" height="2" rx="1" fill="${bright}" opacity=".22"/>`,
+    'fire':    `<rect x="4" y="14" width="28" height="14" rx="2.5" fill="${shade}" stroke="${c}" stroke-width="1"/><path d="M12 20 Q18 10 24 20 Q20 16 18 22 Q16 16 12 20Z" fill="#c47a6a"/><path d="M15 20 Q18 14 21 20 Q19 18 18 22 Q17 18 15 20Z" fill="#f2c16b"/>`,
+    'qbed':    `<rect x="4" y="2" width="28" height="32" rx="4" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="4" y="2" width="28" height="9" rx="3" fill="${lite}"/><rect x="7" y="14" width="10" height="10" rx="2.5" fill="${bright}" opacity=".45"/><rect x="19" y="14" width="10" height="10" rx="2.5" fill="${bright}" opacity=".45"/><rect x="8" y="25" width="20" height="6" rx="2.5" fill="${lite}" opacity=".2"/>`,
+    'kbed':    `<rect x="2" y="2" width="32" height="32" rx="4" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="2" y="2" width="32" height="9" rx="3" fill="${lite}"/><rect x="5" y="14" width="12" height="10" rx="2.5" fill="${bright}" opacity=".45"/><rect x="19" y="14" width="12" height="10" rx="2.5" fill="${bright}" opacity=".45"/><rect x="7" y="25" width="22" height="6" rx="2.5" fill="${lite}" opacity=".2"/>`,
+    'tbed':    `<rect x="8" y="2" width="20" height="32" rx="4" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="8" y="2" width="20" height="9" rx="3" fill="${lite}"/><rect x="10" y="15" width="16" height="11" rx="2.5" fill="${bright}" opacity=".32"/>`,
+    'dresser': `<rect x="4" y="8" width="28" height="22" rx="2.5" fill="${c}" stroke="${shade}" stroke-width="1"/><line x1="4" y1="18" x2="32" y2="18" stroke="${lite}" stroke-width="1.2"/><circle cx="18" cy="14" r="2" fill="${bright}"/><circle cx="18" cy="22" r="2" fill="${bright}"/>`,
+    'ns':      `<rect x="6" y="8" width="24" height="22" rx="2.5" fill="${c}" stroke="${shade}" stroke-width="1"/><circle cx="18" cy="19" r="4" fill="${bright}" opacity=".55"/><rect x="8" y="10" width="20" height="4" rx="2" fill="${lite}" opacity=".22"/>`,
+    'ward':    `<rect x="2" y="6" width="32" height="24" rx="2.5" fill="${c}" stroke="${shade}" stroke-width="1"/><line x1="18" y1="6" x2="18" y2="30" stroke="${lite}" stroke-width="1.2"/><circle cx="15" cy="18" r="2" fill="${bright}"/><circle cx="21" cy="18" r="2" fill="${bright}"/>`,
+    'desk':    `<rect x="2" y="10" width="32" height="18" rx="2.5" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="2" y="10" width="8" height="18" rx="2" fill="${lite}" opacity=".5"/><rect x="12" y="13" width="18" height="4" rx="1.5" fill="${bright}" opacity=".18"/>`,
+    'counter': `<rect x="2" y="12" width="32" height="16" rx="2.5" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="2" y="12" width="32" height="5" rx="1.2" fill="${lite}" opacity=".55"/>`,
+    'island':  `<rect x="4" y="8" width="28" height="20" rx="4" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="4" y="8" width="28" height="6" rx="2.5" fill="${lite}" opacity=".5"/><rect x="8" y="16" width="20" height="8" rx="2.5" fill="${bright}" opacity=".12"/>`,
+    'stove':   `<rect x="4" y="8" width="28" height="22" rx="2.5" fill="${c}" stroke="${shade}" stroke-width="1"/><circle cx="13" cy="16" r="4" fill="${lite}" opacity=".8"/><circle cx="23" cy="16" r="4" fill="${lite}" opacity=".8"/><circle cx="13" cy="26" r="4" fill="${lite}" opacity=".8"/><circle cx="23" cy="26" r="4" fill="${lite}" opacity=".8"/><circle cx="13" cy="16" r="2" fill="${bright}" opacity=".6"/><circle cx="23" cy="26" r="2" fill="${bright}" opacity=".6"/>`,
+    'fridge':  `<rect x="6" y="4" width="24" height="28" rx="4" fill="${c}" stroke="${shade}" stroke-width="1"/><line x1="6" y1="18" x2="30" y2="18" stroke="${lite}" stroke-width="1.5"/><rect x="22" y="9" width="4" height="6" rx="1" fill="${bright}"/><rect x="22" y="20" width="4" height="8" rx="1" fill="${bright}"/><rect x="8" y="6" width="20" height="8" rx="2" fill="${lite}" opacity=".16"/>`,
+    'dtable':  `<rect x="2" y="6" width="32" height="24" rx="3" fill="${c}" stroke="${shade}" stroke-width="1"/><rect x="4" y="8" width="28" height="6" rx="3" fill="${bright}" opacity=".12"/><rect x="6" y="2" width="6" height="4" rx="1" fill="${shade}"/><rect x="24" y="2" width="6" height="4" rx="1" fill="${shade}"/><rect x="6" y="30" width="6" height="4" rx="1" fill="${shade}"/><rect x="24" y="30" width="6" height="4" rx="1" fill="${shade}"/>`,
+    'toilet':  `<rect x="8" y="4" width="20" height="12" rx="3" fill="${lite}" stroke="${shade}" stroke-width="1"/><ellipse cx="18" cy="24" rx="10" ry="10" fill="${c}" stroke="${shade}" stroke-width="1"/><ellipse cx="18" cy="24" rx="7" ry="7" fill="${bright}" opacity=".35"/>`,
+    'sink':    `<rect x="4" y="8" width="28" height="22" rx="5" fill="${c}" stroke="${shade}" stroke-width="1"/><ellipse cx="18" cy="20" rx="9" ry="8" fill="${bright}" opacity=".28"/><circle cx="18" cy="20" r="2" fill="${lite}"/><rect x="9" y="11" width="18" height="3" rx="1.5" fill="${lite}" opacity=".25"/>`,
+    'shower':  `<rect x="4" y="4" width="28" height="28" rx="4" fill="${c}" stroke="${shade}" stroke-width="1"/><circle cx="28" cy="8" r="3" fill="${lite}"/><line x1="4" y1="30" x2="30" y2="4" stroke="${bright}" stroke-width="1.2" stroke-dasharray="3,3"/><rect x="7" y="7" width="22" height="22" rx="3" fill="${bright}" opacity=".1"/>`,
+    'bath':    `<rect x="2" y="8" width="32" height="20" rx="7" fill="${c}" stroke="${shade}" stroke-width="1"/><ellipse cx="18" cy="18" rx="12" ry="7" fill="${bright}" opacity=".3"/><circle cx="6" cy="14" r="3" fill="${lite}" opacity=".8"/>`,
+    'dsink':   `<rect x="2" y="10" width="32" height="18" rx="3.5" fill="${c}" stroke="${shade}" stroke-width="1"/><ellipse cx="12" cy="19" rx="7" ry="6" fill="${bright}" opacity=".3"/><ellipse cx="24" cy="19" rx="7" ry="6" fill="${bright}" opacity=".3"/><rect x="6" y="12" width="24" height="3" rx="1.5" fill="${lite}" opacity=".24"/>`,
+    'room':    `<rect x="2" y="2" width="32" height="32" rx="2.5" fill="rgba(255,255,255,.08)" stroke="${c}" stroke-width="2.5"/><rect x="6" y="30" width="8" height="4" rx="1" fill="${shade}"/>`,
+    'closet':  `<rect x="4" y="4" width="28" height="28" rx="3" fill="${c}" stroke="${shade}" stroke-width="1"/><line x1="18" y1="4" x2="18" y2="32" stroke="${lite}" stroke-width="1.2"/><rect x="7" y="7" width="22" height="6" rx="2" fill="${bright}" opacity=".12"/>`,
+    'laundry': `<rect x="4" y="4" width="28" height="28" rx="5" fill="${c}" stroke="${shade}" stroke-width="1"/><circle cx="18" cy="18" rx="10" ry="10" fill="${lite}" opacity=".45"/><circle cx="18" cy="18" r="4" fill="${bright}" opacity=".3"/><circle cx="11" cy="10" r="1.5" fill="${bright}"/><circle cx="15" cy="10" r="1.5" fill="${bright}"/>`,
+    'plant':   `<circle cx="18" cy="24" r="9" fill="${c}" stroke="${shade}" stroke-width="1"/><path d="M18 14 Q14 8 10 10 Q14 12 18 18 Q22 12 26 10 Q22 8 18 14Z" fill="${lite}"/><path d="M18 16 Q15 12 13 13 Q15 16 18 20 Q21 16 23 13 Q21 12 18 16Z" fill="${bright}" opacity=".55"/>`,
   };
   return s + (icons[type] || `<rect x="4" y="4" width="28" height="28" rx="3" fill="${c}"/>`) + e;
 }
@@ -383,6 +414,14 @@ function lightenHex(hex, amount) {
   const r = Math.min(255, (num >> 16) + amount);
   const g = Math.min(255, ((num >> 8) & 0xff) + amount);
   const b = Math.min(255, (num & 0xff) + amount);
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+}
+
+function darkenHex(hex, amount) {
+  const num = parseInt(hex.replace('#',''), 16);
+  const r = Math.max(0, (num >> 16) - amount);
+  const g = Math.max(0, ((num >> 8) & 0xff) - amount);
+  const b = Math.max(0, (num & 0xff) - amount);
   return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
 }
 
@@ -864,7 +903,7 @@ function renderItem(item) {
     el = document.createElement('div');
     el.className = 'floor-item';
     el.id = 'item-' + item.id;
-    el.innerHTML = `<div class="item-body"><div class="item-label"></div></div><div class="resize-handle"></div><div class="delete-btn">×</div>`;
+    el.innerHTML = `<div class="item-body"><div class="item-icon"></div><div class="item-meta"><div class="item-name"></div><div class="item-dims"></div></div></div><div class="resize-handle"></div><div class="delete-btn">×</div>`;
     document.getElementById('canvas').appendChild(el);
     el.addEventListener('mousedown', ev => onItemMouseDown(ev, item.id));
     el.querySelector('.resize-handle').addEventListener('mousedown', ev => onResizeMouseDown(ev, item.id));
@@ -879,11 +918,13 @@ function renderItem(item) {
   el.classList.toggle('selected', item.id === selectedId);
   el.classList.toggle('grouped', isGroupSelected(item.id));
   const body = el.querySelector('.item-body');
-  body.style.background = item.color || '#3a3830';
-  body.style.border = '1px solid ' + lightenHex(item.color || '#3a3830', 30);
-  const lbl = el.querySelector('.item-label');
-  lbl.textContent = item.name;
-  lbl.style.color = lightenHex(item.color || '#3a3830', 80);
+  body.style.color = item.color || '#3a3830';
+  const icon = el.querySelector('.item-icon');
+  icon.innerHTML = makeIcon(item.icon || item.type, item.color || '#3a3830');
+  const name = el.querySelector('.item-name');
+  const dims = el.querySelector('.item-dims');
+  name.textContent = item.name;
+  dims.textContent = `${item.w} × ${item.h} ft`;
   return el;
 }
 
@@ -915,20 +956,22 @@ canvasWrap.addEventListener('wheel', ev => {
 }, { passive: false });
 
 function addItem(tmpl) {
+  const catalogEntry = getCatalogEntry(tmpl.type, tmpl.id, tmpl.name, tmpl.icon);
   const width = Math.max(1, Math.round(Number(tmpl.w) || 1));
   const height = Math.max(1, Math.round(Number(tmpl.h) || 1));
   const x = Number.isFinite(Number(tmpl.x)) ? snap(Number(tmpl.x)) : snap(40);
   const y = Number.isFinite(Number(tmpl.y)) ? snap(Number(tmpl.y)) : snap(40);
   const item = {
     id: ++idCounter,
-    name: tmpl.name,
-    type: tmpl.type || tmpl.id,
-    desc: tmpl.desc,
+    name: tmpl.name || catalogEntry?.name || 'Artifact',
+    type: tmpl.type || tmpl.id || catalogEntry?.id || 'artifact',
+    icon: tmpl.icon || catalogEntry?.icon || tmpl.type || tmpl.id || 'room',
+    desc: tmpl.desc || catalogEntry?.desc || '',
     x,
     y,
     w: width,
     h: height,
-    color: tmpl.color || COLORS[idCounter % COLORS.length],
+    color: tmpl.color || catalogEntry?.color || COLORS[idCounter % COLORS.length],
     z: tmpl.z || 1,
   };
   constrainItemToGrid(item);

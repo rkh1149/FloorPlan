@@ -1,0 +1,12 @@
+{
+  "name": "floorcraft-codespaces",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Codespaces-ready FloorCraft app with a secure OpenAI backend.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

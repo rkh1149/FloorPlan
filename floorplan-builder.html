@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FloorCraft — AI Floor Plan Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #0f0e0c;
+  --surface: #1a1916;
+  --surface2: #222120;
+  --border: #333230;
+  --border2: #444240;
+  --text: #e8e4dc;
+  --text2: #9a9690;
+  --text3: #5a5854;
+  --accent: #c8a96e;
+  --accent2: #8fa87a;
+  --accent3: #7a9eb5;
+  --danger: #c47a6a;
+  --grid: #1e1d1b;
+  --grid-strong: #2a2926;
+  --snap: 20;
+  --cell: 20px;
+  --radius: 6px;
+  --font-mono: 'DM Mono', monospace;
+  --font-display: 'Fraunces', serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-mono); font-size: 13px; }
+
+/* ── Layout ── */
+.app { display: grid; grid-template-rows: 52px 1fr; grid-template-columns: 260px 1fr 240px; height: 100vh; gap: 0; }
+.topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--surface); z-index: 100; }
+.logo { font-family: var(--font-display); font-size: 18px; font-weight: 600; color: var(--accent); letter-spacing: -0.02em; margin-right: 8px; white-space: nowrap; }
+.logo span { font-style: italic; font-weight: 300; color: var(--text2); }
+.prompt-wrap { flex: 1; display: flex; gap: 8px; align-items: center; }
+.prompt-input { flex: 1; background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 7px 12px; outline: none; transition: border-color .2s; }
+.prompt-input:focus { border-color: var(--accent); }
+.prompt-input::placeholder { color: var(--text3); }
+.btn { background: var(--accent); color: #1a1710; border: none; border-radius: var(--radius); font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 7px 14px; cursor: pointer; transition: opacity .15s, transform .1s; white-space: nowrap; }
+.btn:hover { opacity: .85; }
+.btn:active { transform: scale(.97); }
+.btn.secondary { background: var(--surface2); color: var(--text2); border: 1px solid var(--border2); }
+.btn.secondary:hover { border-color: var(--border2); color: var(--text); }
+.btn.secondary.active { color: var(--accent); border-color: var(--accent); background: #272117; }
+.btn.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+.topbar-actions { display: flex; gap: 6px; }
+.grid-controls { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius); color: var(--text2); }
+.grid-controls span { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); }
+.grid-size-input { width: 54px; background: var(--bg); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: var(--font-mono); font-size: 11px; padding: 5px 6px; outline: none; }
+.grid-size-input:focus { border-color: var(--accent); }
+.zoom-input { width: 58px; }
+
+/* ── Left panel: palette ── */
+.palette { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.panel-title { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--text3); padding: 4px 0 8px; border-bottom: 1px solid var(--border); }
+.cat-label { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--text3); margin-top: 4px; margin-bottom: 6px; }
+.artifact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.artifact-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 6px; cursor: grab; display: flex; flex-direction: column; align-items: center; gap: 5px; transition: border-color .15s, transform .1s; user-select: none; }
+.artifact-item:hover { border-color: var(--accent); transform: translateY(-1px); }
+.artifact-item:active { cursor: grabbing; }
+.artifact-icon { width: 36px; height: 36px; }
+.artifact-name { font-size: 10px; color: var(--text2); text-align: center; line-height: 1.3; }
+.artifact-dims { font-size: 9px; color: var(--text3); }
+
+/* ── Canvas ── */
+.canvas-wrap { position: relative; overflow: auto; background: var(--bg); }
+#canvas { position: relative; min-width: 100%; min-height: 100%; overflow: hidden; cursor: default; }
+.grid-bg { position: absolute; inset: 0; pointer-events: none; }
+.floor-item { position: absolute; cursor: move; user-select: none; }
+.floor-item .item-body { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 3px; font-size: 9px; color: var(--text2); text-align: center; line-height: 1.2; transition: box-shadow .15s; position: relative; overflow: hidden; }
+.floor-item.selected .item-body { box-shadow: 0 0 0 2px var(--accent); }
+.floor-item .resize-handle { position: absolute; bottom: 1px; right: 1px; width: 10px; height: 10px; cursor: se-resize; opacity: 0; transition: opacity .15s; }
+.floor-item:hover .resize-handle, .floor-item.selected .resize-handle { opacity: 1; }
+.resize-handle::after { content: ''; display: block; width: 6px; height: 6px; border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent); margin: 2px 0 0 2px; }
+.floor-item .item-label { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 8px; text-align: center; color: var(--text2); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.delete-btn { position: absolute; top: -8px; right: -8px; width: 16px; height: 16px; background: var(--danger); border-radius: 50%; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #fff; opacity: 0; transition: opacity .15s; z-index: 10; }
+.floor-item.selected .delete-btn { opacity: 1; }
+.floor-item.grouped .item-body { box-shadow: inset 0 0 0 1px rgba(122, 158, 181, .95); }
+#canvas.room-move-active { cursor: crosshair; }
+#canvas.room-move-active .resize-handle,
+#canvas.room-move-active .delete-btn { opacity: 0 !important; pointer-events: none; }
+.room-selection-box { position: absolute; border: 1px dashed var(--accent3); background: rgba(122, 158, 181, .12); pointer-events: none; z-index: 60; display: none; }
+.room-group-outline { position: absolute; border: 2px dashed var(--accent); background: rgba(200, 169, 110, .08); pointer-events: auto; cursor: grab; z-index: 55; display: none; }
+.room-group-outline::after { content: attr(data-label); position: absolute; top: -24px; left: 0; background: var(--surface); border: 1px solid var(--border2); border-radius: 999px; color: var(--accent); font-size: 10px; line-height: 1; padding: 5px 8px; white-space: nowrap; }
+.render-panel { position: absolute; inset: 18px 18px 18px 42px; background: rgba(26, 25, 22, .95); border: 1px solid var(--border2); border-radius: 12px; z-index: 250; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(12px); }
+.render-panel.visible { display: flex; }
+.render-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(34,33,32,.95), rgba(26,25,22,.9)); }
+.render-panel-title { font-family: var(--font-display); font-size: 18px; color: var(--accent); }
+.render-panel-note { padding: 10px 16px 0; font-size: 11px; color: var(--text3); }
+.render-grid { padding: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; overflow: auto; }
+.render-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; min-height: 240px; display: flex; flex-direction: column; }
+.render-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.render-card-title { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text2); }
+.render-card-body { position: relative; flex: 1; min-height: 180px; background: linear-gradient(180deg, #1d1c1a, #12110f); display: flex; align-items: center; justify-content: center; }
+.render-placeholder { padding: 18px; text-align: center; font-size: 11px; line-height: 1.6; color: var(--text3); }
+.render-placeholder.loading { color: var(--text2); }
+.render-placeholder.error { color: var(--danger); }
+.render-image { width: 100%; height: 100%; object-fit: cover; display: block; }
+.render-actions { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--border); }
+.render-actions .btn { flex: 1; padding: 6px 10px; font-size: 11px; }
+
+@media (max-width: 1100px) {
+  .render-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Right panel: inspector ── */
+.inspector { background: var(--surface); border-left: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.inspector-empty { color: var(--text3); font-size: 12px; line-height: 1.6; padding: 8px 0; }
+.inspector-name { font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--accent); margin-bottom: 2px; }
+.inspector-desc { font-size: 11px; color: var(--text2); line-height: 1.6; margin-bottom: 8px; }
+.field-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.field-label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); }
+.field-input { background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 6px 10px; outline: none; width: 100%; transition: border-color .2s; }
+.field-input:focus { border-color: var(--accent); }
+.dims-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.color-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.color-swatch { width: 20px; height: 20px; border-radius: 4px; cursor: pointer; border: 2px solid transparent; transition: border-color .15s; }
+.color-swatch.active { border-color: var(--text); }
+.rotate-btn { background: var(--surface2); border: 1px solid var(--border2); color: var(--text2); border-radius: var(--radius); padding: 6px 10px; font-family: var(--font-mono); font-size: 11px; cursor: pointer; width: 100%; }
+.rotate-btn:hover { color: var(--text); border-color: var(--border2); }
+
+/* ── Grid ruler ── */
+.ruler { position: absolute; background: var(--surface); z-index: 10; pointer-events: none; }
+.ruler-h { top: 0; left: 24px; right: 0; height: 24px; border-bottom: 1px solid var(--border); }
+.ruler-v { top: 24px; left: 0; width: 24px; bottom: 0; border-right: 1px solid var(--border); }
+.ruler-corner { position: absolute; top: 0; left: 0; width: 24px; height: 24px; background: var(--surface); z-index: 11; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); pointer-events: none; }
+
+/* ── Loading overlay ── */
+.loading-overlay { position: absolute; inset: 0; background: rgba(15,14,12,.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; z-index: 200; opacity: 0; pointer-events: none; transition: opacity .3s; }
+.loading-overlay.visible { opacity: 1; pointer-events: all; }
+.loading-text { font-family: var(--font-display); font-size: 20px; font-weight: 300; font-style: italic; color: var(--accent); }
+.loading-sub { font-size: 11px; color: var(--text3); }
+.spinner { width: 32px; height: 32px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Tooltip ── */
+.tooltip { position: fixed; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius); padding: 6px 10px; font-size: 11px; color: var(--text2); pointer-events: none; z-index: 300; opacity: 0; transition: opacity .15s; max-width: 180px; line-height: 1.5; }
+.tooltip.visible { opacity: 1; }
+
+/* ── Scale indicator ── */
+.scale-badge { position: absolute; bottom: 12px; left: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 10px; font-size: 10px; color: var(--text3); z-index: 50; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="logo">Floor<span>Craft</span></div>
+  <div class="prompt-wrap">
+    <input class="prompt-input" id="promptInput" placeholder="Describe your space… e.g. 'A master bedroom with ensuite and walk-in closet'" />
+    <button class="btn" id="generateBtn" onclick="generateFloorplan()">✦ Generate</button>
+  </div>
+  <div class="topbar-actions">
+    <div class="grid-controls">
+      <span>Grid</span>
+      <input class="grid-size-input" id="gridWidthInput" type="number" min="20" max="300" step="5" value="60" />
+      <span>×</span>
+      <input class="grid-size-input" id="gridHeightInput" type="number" min="20" max="300" step="5" value="40" />
+      <span>ft</span>
+    </div>
+    <div class="grid-controls">
+      <span>Zoom</span>
+      <input class="grid-size-input zoom-input" id="zoomInput" type="number" min="50" max="300" step="10" value="100" />
+      <span>%</span>
+    </div>
+    <button class="btn secondary" id="apiStatusBtn" onclick="showApiStatus()">Server API</button>
+    <button class="btn secondary" id="renderViewsBtn" onclick="renderFourViews()">Render 4 Views</button>
+    <button class="btn secondary" id="roomMoveBtn" onclick="toggleRoomMoveMode()">Move Room</button>
+    <button class="btn secondary" onclick="clearCanvas()">Clear</button>
+    <button class="btn secondary" onclick="exportPNG()">Export PNG</button>
+  </div>
+</header>
+
+<!-- PALETTE -->
+<aside class="palette" id="palette">
+  <div class="panel-title">Artifacts</div>
+</aside>
+
+<!-- CANVAS -->
+<main class="canvas-wrap">
+  <div class="ruler ruler-corner"></div>
+  <canvas class="ruler ruler-h" id="rulerH"></canvas>
+  <canvas class="ruler ruler-v" id="rulerV"></canvas>
+  <div id="canvas" onclick="deselectAll(event)">
+    <canvas class="grid-bg" id="gridCanvas"></canvas>
+    <div class="room-selection-box" id="roomSelectionBox"></div>
+    <div class="room-group-outline" id="roomGroupOutline" data-label=""></div>
+  </div>
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-text">Drafting your space…</div>
+    <div class="loading-sub" id="loadingSub">Interpreting description</div>
+  </div>
+  <div class="scale-badge" id="scaleBadge">1 cell = 1 ft</div>
+  <div class="render-panel" id="renderPanel">
+    <div class="render-panel-header">
+      <div class="render-panel-title">Photoreal Views</div>
+      <button class="btn secondary" onclick="closeRenderPanel()">Close</button>
+    </div>
+    <div class="render-panel-note">AI-generated architectural interpretations of the current floorplan from the north, south, east, and west sides.</div>
+    <div class="render-grid" id="renderGrid"></div>
+  </div>
+</main>
+
+<!-- INSPECTOR -->
+<aside class="inspector" id="inspector">
+  <div class="panel-title">Inspector</div>
+  <div class="inspector-empty" id="inspectorEmpty">Select an item on the canvas to view and edit its properties.</div>
+  <div id="inspectorContent" style="display:none"></div>
+</aside>
+
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ── Constants ──
+const BASE_CELL = 20; // px per grid cell = 1 ft at 100% zoom
+let CELL = BASE_CELL;
+const SCALE_LABEL = '1 cell = 1 ft';
+const DEFAULT_GRID_WIDTH = 60;
+const DEFAULT_GRID_HEIGHT = 40;
+const DEFAULT_ZOOM = 100;
+const API_CONFIG_URL = '/api/config';
+const API_FLOORPLAN_URL = '/api/generate-floorplan';
+const API_RENDER_VIEW_URL = '/api/render-view';
+const DEFAULT_INSPECTOR_EMPTY = 'Select an item on the canvas to view and edit its properties.';
+const CARDINAL_VIEWS = [
+  { id: 'north', label: 'North View', camera: 'viewed from the north side looking south across the full floor plan' },
+  { id: 'south', label: 'South View', camera: 'viewed from the south side looking north across the full floor plan' },
+  { id: 'east', label: 'East View', camera: 'viewed from the east side looking west across the full floor plan' },
+  { id: 'west', label: 'West View', camera: 'viewed from the west side looking east across the full floor plan' }
+];
+const FLOORPLAN_TYPE_IDS = [
+  'wall-h', 'wall-v', 'ext-wall-h', 'ext-wall-v', 'door', 'window', 'sliding', 'stairs',
+  'sofa', 'armchair', 'coffee-tbl', 'tv-unit', 'bookshelf', 'fireplace',
+  'queen-bed', 'king-bed', 'twin-bed', 'dresser', 'nightstand', 'wardrobe', 'desk',
+  'counter', 'island', 'stove', 'fridge', 'd-table',
+  'toilet', 'sink', 'shower', 'bathtub', 'dbl-sink',
+  'room', 'closet', 'laundry', 'plant'
+];
+const FLOORPLAN_RESPONSE_FORMAT = {
+  type: 'json_schema',
+  name: 'floorplan_items',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            type: { type: 'string', enum: FLOORPLAN_TYPE_IDS },
+            name: { type: 'string' },
+            desc: { type: 'string' },
+            x: { type: 'integer', minimum: 0, maximum: 300 },
+            y: { type: 'integer', minimum: 0, maximum: 300 },
+            w: { type: 'integer', minimum: 1, maximum: 300 },
+            h: { type: 'integer', minimum: 1, maximum: 300 },
+            color: { type: 'string' },
+            z: { type: 'integer', minimum: 1, maximum: 10 }
+          },
+          required: ['type', 'name', 'desc', 'x', 'y', 'w', 'h', 'color', 'z']
+        }
+      }
+    },
+    required: ['items']
+  }
+};
+
+// ── Palette catalog ──
+const CATALOG = {
+  'Structure': [
+    { id:'wall-h',   name:'Wall (H)',      w:6,  h:1,  desc:'Horizontal interior wall, 6 ft long',   color:'#5a5650', icon:'wall-h'  },
+    { id:'wall-v',   name:'Wall (V)',      w:1,  h:6,  desc:'Vertical interior wall, 6 ft tall',     color:'#5a5650', icon:'wall-v'  },
+    { id:'ext-wall-h',name:'Ext. Wall (H)',w:8,  h:1,  desc:'Exterior wall, 8 ft long, thicker',     color:'#3a3830', icon:'ext-h'   },
+    { id:'ext-wall-v',name:'Ext. Wall (V)',w:1,  h:8,  desc:'Exterior wall, 8 ft tall, thicker',     color:'#3a3830', icon:'ext-v'   },
+    { id:'door',     name:'Door',          w:3,  h:1,  desc:'Interior hinged door, 3 ft wide',       color:'#7a6a50', icon:'door'    },
+    { id:'window',   name:'Window',        w:4,  h:1,  desc:'Standard window, 4 ft wide',            color:'#4a6a7a', icon:'window'  },
+    { id:'sliding',  name:'Sliding Door',  w:5,  h:1,  desc:'Sliding glass door, 5 ft wide',         color:'#5a7a8a', icon:'sliding' },
+    { id:'stairs',   name:'Stairs',        w:4,  h:5,  desc:'Staircase, 4 ft × 5 ft footprint',     color:'#6a5a48', icon:'stairs'  },
+  ],
+  'Living': [
+    { id:'sofa',      name:'Sofa',          w:7,  h:3,  desc:'3-seat sofa, 7 ft × 3 ft',             color:'#4a5060', icon:'sofa'    },
+    { id:'armchair',  name:'Armchair',      w:3,  h:3,  desc:'Armchair, 3 ft × 3 ft',                color:'#4a5060', icon:'chair'   },
+    { id:'coffee-tbl',name:'Coffee Table',  w:4,  h:2,  desc:'Coffee table, 4 ft × 2 ft',            color:'#4a3e30', icon:'ctable'  },
+    { id:'tv-unit',   name:'TV Unit',       w:6,  h:2,  desc:'TV unit/entertainment center, 6 ft',   color:'#3a3830', icon:'tv'      },
+    { id:'bookshelf', name:'Bookshelf',     w:4,  h:1,  desc:'Bookshelf, 4 ft wide × 1 ft deep',    color:'#3a3428', icon:'shelf'   },
+    { id:'fireplace', name:'Fireplace',     w:4,  h:2,  desc:'Gas fireplace, 4 ft wide',             color:'#5a4438', icon:'fire'    },
+  ],
+  'Bedroom': [
+    { id:'queen-bed', name:'Queen Bed',     w:5,  h:7,  desc:'Queen bed, 5 ft × 7 ft',               color:'#4a4858', icon:'qbed'    },
+    { id:'king-bed',  name:'King Bed',      w:6,  h:7,  desc:'King bed, 6 ft × 7 ft',                color:'#4a4858', icon:'kbed'    },
+    { id:'twin-bed',  name:'Twin Bed',      w:3,  h:7,  desc:'Twin bed, 3 ft × 7 ft',                color:'#4a4858', icon:'tbed'    },
+    { id:'dresser',   name:'Dresser',       w:4,  h:2,  desc:'Dresser, 4 ft × 2 ft',                 color:'#3a3428', icon:'dresser' },
+    { id:'nightstand',name:'Nightstand',    w:2,  h:2,  desc:'Nightstand, 2 ft × 2 ft',              color:'#3a3428', icon:'ns'      },
+    { id:'wardrobe',  name:'Wardrobe',      w:4,  h:2,  desc:'Wardrobe, 4 ft × 2 ft',                color:'#3a3428', icon:'ward'    },
+    { id:'desk',      name:'Desk',          w:4,  h:2,  desc:'Writing desk, 4 ft × 2 ft',            color:'#2a3038', icon:'desk'    },
+  ],
+  'Kitchen': [
+    { id:'counter',   name:'Counter',       w:4,  h:2,  desc:'Kitchen counter/base cabinet, 4 ft',   color:'#3a5048', icon:'counter' },
+    { id:'island',    name:'Island',        w:5,  h:3,  desc:'Kitchen island, 5 ft × 3 ft',          color:'#3a5048', icon:'island'  },
+    { id:'stove',     name:'Stove/Range',   w:3,  h:2,  desc:'Gas or electric range, 30 in wide',    color:'#2a2e38', icon:'stove'   },
+    { id:'fridge',    name:'Refrigerator',  w:3,  h:3,  desc:'Standard fridge, 30 in × 30 in',       color:'#2a2e38', icon:'fridge'  },
+    { id:'d-table',   name:'Dining Table',  w:6,  h:4,  desc:'Dining table, 6 ft × 4 ft, seats 6',  color:'#3a3428', icon:'dtable'  },
+  ],
+  'Bathroom': [
+    { id:'toilet',    name:'Toilet',        w:2,  h:3,  desc:'Standard toilet, 2 ft × 3 ft',         color:'#3a4848', icon:'toilet'  },
+    { id:'sink',      name:'Sink/Vanity',   w:2,  h:2,  desc:'Bathroom sink or vanity, 2 ft × 2 ft', color:'#3a4848', icon:'sink'    },
+    { id:'shower',    name:'Shower',        w:4,  h:4,  desc:'Walk-in shower, 4 ft × 4 ft',          color:'#2a3a40', icon:'shower'  },
+    { id:'bathtub',   name:'Bathtub',       w:5,  h:3,  desc:'Standard soaking tub, 5 ft × 3 ft',   color:'#2a3a40', icon:'bath'    },
+    { id:'dbl-sink',  name:'Double Vanity', w:5,  h:2,  desc:'Double sink vanity, 5 ft wide',        color:'#3a4848', icon:'dsink'   },
+  ],
+  'Other': [
+    { id:'room',      name:'Room',          w:12, h:10, desc:'Generic room outline, 12 ft × 10 ft',  color:'#2a2826', icon:'room'    },
+    { id:'closet',    name:'Closet',        w:4,  h:3,  desc:'Walk-in or reach-in closet',           color:'#2a2a28', icon:'closet'  },
+    { id:'laundry',   name:'W/D',           w:3,  h:3,  desc:'Washer/Dryer unit, 3 ft × 3 ft',      color:'#2a3038', icon:'laundry' },
+    { id:'plant',     name:'Plant',         w:2,  h:2,  desc:'Large potted plant, decorative',       color:'#2a3828', icon:'plant'   },
+  ],
+};
+
+// SVG icon generators (draw mini icons for each type)
+function makeIcon(type, color) {
+  const s = `<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">`;
+  const e = `</svg>`;
+  const c = color || '#555';
+  const lite = lightenHex(c, 60);
+  const icons = {
+    'wall-h':  `<rect x="2" y="15" width="32" height="6" rx="1" fill="${c}"/>`,
+    'wall-v':  `<rect x="15" y="2" width="6" height="32" rx="1" fill="${c}"/>`,
+    'ext-h':   `<rect x="2" y="13" width="32" height="10" rx="1" fill="${c}"/>`,
+    'ext-v':   `<rect x="13" y="2" width="10" height="32" rx="1" fill="${c}"/>`,
+    'door':    `<rect x="2" y="14" width="22" height="3" rx="1" fill="${c}"/><path d="M2 14 Q2 4 22 4" fill="none" stroke="${lite}" stroke-width="1" stroke-dasharray="2,2"/>`,
+    'window':  `<rect x="2" y="15" width="32" height="4" rx="1" fill="${c}"/><line x1="10" y1="15" x2="10" y2="19" stroke="${lite}" stroke-width="1"/><line x1="18" y1="15" x2="18" y2="19" stroke="${lite}" stroke-width="1"/><line x1="26" y1="15" x2="26" y2="19" stroke="${lite}" stroke-width="1"/>`,
+    'sliding': `<rect x="2" y="14" width="32" height="4" rx="1" fill="${c}"/><rect x="2" y="14" width="14" height="4" rx="1" fill="${lite}" opacity=".5"/>`,
+    'stairs':  `<rect x="4" y="4" width="28" height="28" rx="2" fill="none" stroke="${c}" stroke-width="1.5"/>${[0,1,2,3,4].map(i=>`<line x1="4" y1="${9+i*5}" x2="32" y2="${9+i*5}" stroke="${lite}" stroke-width="1"/>`).join('')}`,
+    'sofa':    `<rect x="2" y="12" width="32" height="18" rx="3" fill="${c}"/><rect x="2" y="8" width="32" height="8" rx="2" fill="${lite}"/><rect x="2" y="12" width="6" height="18" rx="2" fill="${lite}"/><rect x="28" y="12" width="6" height="18" rx="2" fill="${lite}"/>`,
+    'chair':   `<rect x="6" y="10" width="24" height="20" rx="3" fill="${c}"/><rect x="6" y="6" width="24" height="8" rx="2" fill="${lite}"/>`,
+    'ctable':  `<rect x="4" y="10" width="28" height="16" rx="3" fill="${c}"/><rect x="8" y="26" width="4" height="6" rx="1" fill="${lite}"/><rect x="24" y="26" width="4" height="6" rx="1" fill="${lite}"/>`,
+    'tv':      `<rect x="2" y="10" width="32" height="12" rx="2" fill="${c}"/><rect x="4" y="12" width="28" height="8" rx="1" fill="${lite}" opacity=".3"/><rect x="14" y="22" width="8" height="4" rx="1" fill="${c}"/>`,
+    'shelf':   `<rect x="2" y="14" width="32" height="10" rx="2" fill="${c}"/><line x1="11" y1="14" x2="11" y2="24" stroke="${lite}" stroke-width="1"/><line x1="22" y1="14" x2="22" y2="24" stroke="${lite}" stroke-width="1"/>`,
+    'fire':    `<rect x="4" y="14" width="28" height="14" rx="2" fill="${c}"/><path d="M12 20 Q18 10 24 20 Q20 16 18 22 Q16 16 12 20Z" fill="#c47a6a"/>`,
+    'qbed':    `<rect x="4" y="2" width="28" height="32" rx="3" fill="${c}"/><rect x="4" y="2" width="28" height="9" rx="2" fill="${lite}"/><rect x="7" y="14" width="10" height="10" rx="2" fill="${lite}" opacity=".5"/><rect x="19" y="14" width="10" height="10" rx="2" fill="${lite}" opacity=".5"/>`,
+    'kbed':    `<rect x="2" y="2" width="32" height="32" rx="3" fill="${c}"/><rect x="2" y="2" width="32" height="9" rx="2" fill="${lite}"/><rect x="5" y="14" width="12" height="10" rx="2" fill="${lite}" opacity=".5"/><rect x="19" y="14" width="12" height="10" rx="2" fill="${lite}" opacity=".5"/>`,
+    'tbed':    `<rect x="8" y="2" width="20" height="32" rx="3" fill="${c}"/><rect x="8" y="2" width="20" height="9" rx="2" fill="${lite}"/>`,
+    'dresser': `<rect x="4" y="8" width="28" height="22" rx="2" fill="${c}"/><line x1="4" y1="18" x2="32" y2="18" stroke="${lite}" stroke-width="1"/><circle cx="18" cy="14" r="2" fill="${lite}"/><circle cx="18" cy="22" r="2" fill="${lite}"/>`,
+    'ns':      `<rect x="6" y="8" width="24" height="22" rx="2" fill="${c}"/><circle cx="18" cy="19" r="4" fill="${lite}" opacity=".6"/>`,
+    'ward':    `<rect x="2" y="6" width="32" height="24" rx="2" fill="${c}"/><line x1="18" y1="6" x2="18" y2="30" stroke="${lite}" stroke-width="1"/><circle cx="15" cy="18" r="2" fill="${lite}"/><circle cx="21" cy="18" r="2" fill="${lite}"/>`,
+    'desk':    `<rect x="2" y="10" width="32" height="18" rx="2" fill="${c}"/><rect x="2" y="10" width="8" height="18" rx="2" fill="${lite}" opacity=".5"/>`,
+    'counter': `<rect x="2" y="12" width="32" height="16" rx="2" fill="${c}"/><rect x="2" y="12" width="32" height="5" rx="1" fill="${lite}" opacity=".5"/>`,
+    'island':  `<rect x="4" y="8" width="28" height="20" rx="3" fill="${c}"/><rect x="4" y="8" width="28" height="6" rx="2" fill="${lite}" opacity=".4"/>`,
+    'stove':   `<rect x="4" y="8" width="28" height="22" rx="2" fill="${c}"/><circle cx="13" cy="16" r="4" fill="${lite}" opacity=".7"/><circle cx="23" cy="16" r="4" fill="${lite}" opacity=".7"/><circle cx="13" cy="26" r="4" fill="${lite}" opacity=".7"/><circle cx="23" cy="26" r="4" fill="${lite}" opacity=".7"/>`,
+    'fridge':  `<rect x="6" y="4" width="24" height="28" rx="3" fill="${c}"/><line x1="6" y1="18" x2="30" y2="18" stroke="${lite}" stroke-width="1.5"/><rect x="22" y="9" width="4" height="6" rx="1" fill="${lite}"/><rect x="22" y="20" width="4" height="8" rx="1" fill="${lite}"/>`,
+    'dtable':  `<rect x="2" y="6" width="32" height="24" rx="2" fill="${c}"/><rect x="6" y="2" width="6" height="4" rx="1" fill="${lite}"/><rect x="24" y="2" width="6" height="4" rx="1" fill="${lite}"/><rect x="6" y="30" width="6" height="4" rx="1" fill="${lite}"/><rect x="24" y="30" width="6" height="4" rx="1" fill="${lite}"/>`,
+    'toilet':  `<rect x="8" y="4" width="20" height="12" rx="2" fill="${c}"/><ellipse cx="18" cy="24" rx="10" ry="10" fill="${c}"/><ellipse cx="18" cy="24" rx="7" ry="7" fill="${lite}" opacity=".3"/>`,
+    'sink':    `<rect x="4" y="8" width="28" height="22" rx="4" fill="${c}"/><ellipse cx="18" cy="20" rx="9" ry="8" fill="${lite}" opacity=".3"/><circle cx="18" cy="20" r="2" fill="${lite}"/>`,
+    'shower':  `<rect x="4" y="4" width="28" height="28" rx="3" fill="${c}"/><circle cx="28" cy="8" r="3" fill="${lite}"/><line x1="4" y1="30" x2="30" y2="4" stroke="${lite}" stroke-width="0.8" stroke-dasharray="3,3"/>`,
+    'bath':    `<rect x="2" y="8" width="32" height="20" rx="4" fill="${c}"/><ellipse cx="18" cy="18" rx="12" ry="7" fill="${lite}" opacity=".25"/><circle cx="6" cy="14" r="3" fill="${lite}" opacity=".7"/>`,
+    'dsink':   `<rect x="2" y="10" width="32" height="18" rx="3" fill="${c}"/><ellipse cx="12" cy="19" rx="7" ry="6" fill="${lite}" opacity=".3"/><ellipse cx="24" cy="19" rx="7" ry="6" fill="${lite}" opacity=".3"/>`,
+    'room':    `<rect x="2" y="2" width="32" height="32" rx="2" fill="none" stroke="${c}" stroke-width="2.5"/><rect x="6" y="30" width="8" height="4" rx="1" fill="${c}"/>`,
+    'closet':  `<rect x="4" y="4" width="28" height="28" rx="2" fill="${c}"/><line x1="18" y1="4" x2="18" y2="32" stroke="${lite}" stroke-width="1"/>`,
+    'laundry': `<rect x="4" y="4" width="28" height="28" rx="4" fill="${c}"/><circle cx="18" cy="18" rx="10" ry="10" fill="${lite}" opacity=".4"/><circle cx="18" cy="18" r="4" fill="${lite}" opacity=".3"/>`,
+    'plant':   `<circle cx="18" cy="22" r="10" fill="${c}"/><path d="M18 14 Q14 8 10 10 Q14 12 18 18 Q22 12 26 10 Q22 8 18 14Z" fill="${lite}"/>`,
+  };
+  return s + (icons[type] || `<rect x="4" y="4" width="28" height="28" rx="3" fill="${c}"/>`) + e;
+}
+
+function lightenHex(hex, amount) {
+  const num = parseInt(hex.replace('#',''), 16);
+  const r = Math.min(255, (num >> 16) + amount);
+  const g = Math.min(255, ((num >> 8) & 0xff) + amount);
+  const b = Math.min(255, (num & 0xff) + amount);
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+}
+
+// ── State ──
+let items = [];
+let selectedId = null;
+let idCounter = 0;
+let dragState = null;
+let resizeState = null;
+let roomMoveMode = false;
+let roomSelectionState = null;
+let groupDragState = null;
+let groupSelectionIds = [];
+let suppressCanvasClick = false;
+let gridWidth = DEFAULT_GRID_WIDTH;
+let gridHeight = DEFAULT_GRID_HEIGHT;
+let zoomPercent = DEFAULT_ZOOM;
+let renderedViews = {};
+let renderingViews = false;
+let serverApiConfigured = false;
+
+// ── Build palette ──
+function buildPalette() {
+  const pal = document.getElementById('palette');
+  for (const [cat, entries] of Object.entries(CATALOG)) {
+    const label = document.createElement('div');
+    label.className = 'cat-label';
+    label.textContent = cat;
+    pal.appendChild(label);
+    const grid = document.createElement('div');
+    grid.className = 'artifact-grid';
+    entries.forEach(e => {
+      const div = document.createElement('div');
+      div.className = 'artifact-item';
+      div.draggable = true;
+      div.innerHTML = `<div class="artifact-icon">${makeIcon(e.icon, e.color)}</div><div class="artifact-name">${e.name}</div><div class="artifact-dims">${e.w}×${e.h} ft</div>`;
+      div.addEventListener('dragstart', ev => {
+        ev.dataTransfer.setData('artifact', JSON.stringify(e));
+      });
+      div.title = e.desc;
+      grid.appendChild(div);
+    });
+    pal.appendChild(grid);
+  }
+}
+
+// ── Grid canvas ──
+function updateScaleBadge() {
+  document.getElementById('scaleBadge').textContent = `Grid: ${gridWidth} ft × ${gridHeight} ft · ${SCALE_LABEL} · Zoom ${zoomPercent}%`;
+}
+
+function updateGridInputs() {
+  document.getElementById('gridWidthInput').value = gridWidth;
+  document.getElementById('gridHeightInput').value = gridHeight;
+}
+
+function updateZoomInput() {
+  document.getElementById('zoomInput').value = zoomPercent;
+}
+
+function constrainItemToGrid(item) {
+  item.w = Math.min(gridWidth, Math.max(1, Math.round(Number(item.w) || 1)));
+  item.h = Math.min(gridHeight, Math.max(1, Math.round(Number(item.h) || 1)));
+  const maxX = Math.max(0, gridWidth * CELL - item.w * CELL);
+  const maxY = Math.max(0, gridHeight * CELL - item.h * CELL);
+  item.x = Math.min(maxX, Math.max(0, snap(item.x)));
+  item.y = Math.min(maxY, Math.max(0, snap(item.y)));
+}
+
+function constrainAllItemsToGrid() {
+  items.forEach(constrainItemToGrid);
+}
+
+function updateCanvasSize() {
+  const targetWidth = Math.max(canvasWrap.clientWidth, gridWidth * CELL);
+  const targetHeight = Math.max(canvasWrap.clientHeight, gridHeight * CELL);
+  canvas.style.width = targetWidth + 'px';
+  canvas.style.height = targetHeight + 'px';
+  updateScaleBadge();
+}
+
+function applyZoom(nextZoomPercent) {
+  const boundedZoom = Math.max(50, Math.min(300, Math.round(nextZoomPercent / 10) * 10));
+  const nextCell = BASE_CELL * (boundedZoom / 100);
+  if (nextCell === CELL) {
+    zoomPercent = boundedZoom;
+    updateZoomInput();
+    updateScaleBadge();
+    return;
+  }
+
+  const scaleFactor = nextCell / CELL;
+  const scrollLeft = canvasWrap.scrollLeft;
+  const scrollTop = canvasWrap.scrollTop;
+
+  items.forEach(item => {
+    item.x *= scaleFactor;
+    item.y *= scaleFactor;
+  });
+
+  CELL = nextCell;
+  zoomPercent = boundedZoom;
+  updateZoomInput();
+  updateCanvasSize();
+  constrainAllItemsToGrid();
+  renderAll();
+  if (selectedId) {
+    const item = items.find(entry => entry.id === selectedId);
+    if (item) updateInspector(item);
+  }
+  drawGrid();
+  drawRulers();
+  updateGroupOutline();
+  canvasWrap.scrollLeft = scrollLeft * scaleFactor;
+  canvasWrap.scrollTop = scrollTop * scaleFactor;
+}
+
+function initRenderGrid() {
+  const grid = document.getElementById('renderGrid');
+  grid.innerHTML = CARDINAL_VIEWS.map(view => `
+    <div class="render-card" id="render-card-${view.id}">
+      <div class="render-card-header">
+        <div class="render-card-title">${view.label}</div>
+      </div>
+      <div class="render-card-body" id="render-body-${view.id}">
+        <div class="render-placeholder">Generate a render to preview this direction.</div>
+      </div>
+      <div class="render-actions">
+        <button class="btn secondary" id="download-${view.id}" onclick="downloadRenderedView('${view.id}')" disabled>Download</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openRenderPanel() {
+  document.getElementById('renderPanel').classList.add('visible');
+}
+
+function closeRenderPanel() {
+  document.getElementById('renderPanel').classList.remove('visible');
+}
+
+function resetRenderedViews() {
+  renderedViews = {};
+  CARDINAL_VIEWS.forEach(view => {
+    setRenderedViewState(view.id, {
+      label: view.label,
+      status: 'idle',
+      imageUrl: '',
+      message: 'Generate a render to preview this direction.'
+    });
+  });
+}
+
+function setRenderButtonState() {
+  const btn = document.getElementById('renderViewsBtn');
+  btn.disabled = renderingViews || !serverApiConfigured;
+  btn.textContent = renderingViews ? 'Rendering Views…' : 'Render 4 Views';
+}
+
+function setRenderedViewState(id, state) {
+  renderedViews[id] = { ...(renderedViews[id] || {}), ...state };
+  const body = document.getElementById(`render-body-${id}`);
+  const downloadBtn = document.getElementById(`download-${id}`);
+  if (!body || !downloadBtn) return;
+
+  if (renderedViews[id].imageUrl) {
+    body.innerHTML = `<img class="render-image" src="${renderedViews[id].imageUrl}" alt="${renderedViews[id].label || id} render"/>`;
+    downloadBtn.disabled = false;
+    return;
+  }
+
+  const statusClass = renderedViews[id].status === 'error'
+    ? 'render-placeholder error'
+    : renderedViews[id].status === 'loading'
+      ? 'render-placeholder loading'
+      : 'render-placeholder';
+  body.innerHTML = `<div class="${statusClass}">${renderedViews[id].message || 'Generate a render to preview this direction.'}</div>`;
+  downloadBtn.disabled = true;
+}
+
+function floorplanItemsForPrompt() {
+  return items
+    .slice()
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+    .map(item => `- ${item.name} [${item.type}] at (${Math.round(item.x / CELL)} ft, ${Math.round(item.y / CELL)} ft), size ${item.w} ft x ${item.h} ft`)
+    .join('\n');
+}
+
+function buildViewRenderPrompt(view) {
+  const designIntent = document.getElementById('promptInput').value.trim();
+  const floorplanSummary = floorplanItemsForPrompt();
+  return `Create a single photorealistic architectural cutaway render of this floor plan, ${view.camera}. Show the entire layout in one image as a realistic renovation concept visualization, not a 2D blueprint.
+
+Requirements:
+- Preserve the room adjacencies, furniture placement, doors, windows, and overall proportions from the plan.
+- Use a dollhouse-style cutaway or open-wall architectural view so the whole plan is visible from this side.
+- Make it feel photo realistic with natural materials, accurate lighting, realistic shadows, and believable scale.
+- Keep the camera wide enough to see the full plan from this cardinal direction.
+- Do not add people, labels, dimensions, or watermark text.
+
+Floor plan size: ${gridWidth} ft wide x ${gridHeight} ft deep.
+Design intent: ${designIntent || 'No extra style notes were provided, so use a polished contemporary residential finish palette.'}
+
+Floor plan contents:
+${floorplanSummary}`;
+}
+
+function extractGeneratedImage(responseData) {
+  return responseData?.data?.[0]?.b64_json || null;
+}
+
+async function generateRenderedView(view) {
+  setRenderedViewState(view.id, {
+    label: view.label,
+    status: 'loading',
+    message: `Rendering ${view.label.toLowerCase()}…`
+  });
+
+  const res = await fetch(API_RENDER_VIEW_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      viewId: view.id,
+      prompt: buildViewRenderPrompt(view)
+    })
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error?.message || `OpenAI request failed with status ${res.status}`);
+  }
+
+  const base64Image = extractGeneratedImage(data);
+  if (!base64Image) {
+    throw new Error('OpenAI did not return an image for this view.');
+  }
+
+  setRenderedViewState(view.id, {
+    label: view.label,
+    status: 'done',
+    imageUrl: `data:image/png;base64,${base64Image}`
+  });
+}
+
+async function renderFourViews() {
+  if (!items.length) {
+    alert('Add or generate a floorplan first, then render the four views.');
+    return;
+  }
+
+  if (!serverApiConfigured) {
+    alert('The Codespaces server does not have OPENAI_API_KEY configured yet.');
+    return;
+  }
+
+  openRenderPanel();
+  renderingViews = true;
+  setRenderButtonState();
+
+  CARDINAL_VIEWS.forEach(view => {
+    setRenderedViewState(view.id, {
+      label: view.label,
+      status: 'idle',
+      imageUrl: '',
+      message: 'Waiting to render…'
+    });
+  });
+
+  try {
+    for (const view of CARDINAL_VIEWS) {
+      await generateRenderedView(view);
+    }
+  } catch (err) {
+    const pendingView = CARDINAL_VIEWS.find(view => !renderedViews[view.id]?.imageUrl && renderedViews[view.id]?.status !== 'error');
+    if (pendingView) {
+      setRenderedViewState(pendingView.id, {
+        label: pendingView.label,
+        status: 'error',
+        message: err.message
+      });
+    }
+    alert('View rendering failed.\n' + err.message);
+  } finally {
+    renderingViews = false;
+    setRenderButtonState();
+  }
+}
+
+function downloadRenderedView(id) {
+  const imageUrl = renderedViews[id]?.imageUrl;
+  if (!imageUrl) return;
+  const a = document.createElement('a');
+  a.href = imageUrl;
+  a.download = `floorplan-${id}-view.png`;
+  a.click();
+}
+
+function applyGridSize(width, height) {
+  gridWidth = Math.max(20, Math.min(300, Math.round(width)));
+  gridHeight = Math.max(20, Math.min(300, Math.round(height)));
+  updateGridInputs();
+  updateCanvasSize();
+  constrainAllItemsToGrid();
+  renderAll();
+  if (selectedId) {
+    const item = items.find(entry => entry.id === selectedId);
+    if (item) updateInspector(item);
+  }
+  drawGrid();
+  drawRulers();
+  updateGroupOutline();
+}
+
+function drawGrid() {
+  const gc = document.getElementById('gridCanvas');
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  gc.width = w; gc.height = h;
+  gc.style.width = w + 'px'; gc.style.height = h + 'px';
+  const ctx = gc.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  // minor grid
+  ctx.strokeStyle = '#1e1d1b';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < w; x += CELL) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+  for (let y = 0; y < h; y += CELL) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+  // major grid every 5 cells
+  ctx.strokeStyle = '#2a2926';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < w; x += CELL * 5) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+  for (let y = 0; y < h; y += CELL * 5) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+}
+
+function drawRulers() {
+  const rh = document.getElementById('rulerH');
+  const rv = document.getElementById('rulerV');
+  const cw = document.getElementById('canvas').clientWidth;
+  const ch = document.getElementById('canvas').clientHeight;
+  rh.width = cw; rh.height = 24; rh.style.width = cw+'px';
+  rv.width = 24; rv.height = ch; rv.style.height = ch+'px';
+  const hctx = rh.getContext('2d'); hctx.clearRect(0,0,cw,24);
+  const vctx = rv.getContext('2d'); vctx.clearRect(0,0,24,ch);
+  hctx.fillStyle = '#5a5854'; hctx.font = '8px DM Mono, monospace';
+  for (let x = 0; x < cw; x += CELL * 5) { hctx.fillText(x/CELL, x+2, 14); }
+  vctx.fillStyle = '#5a5854'; vctx.font = '8px DM Mono, monospace';
+  vctx.save(); vctx.rotate(-Math.PI/2);
+  for (let y = 0; y < ch; y += CELL * 5) { vctx.fillText(y/CELL, -(y+12), 12); }
+  vctx.restore();
+}
+
+// ── Item rendering ──
+const COLORS = ['#4a5060','#3a5048','#5a4a38','#4a4858','#3a4848','#5a5038','#4a3848','#3a4838'];
+
+function snap(v) { return Math.round(v / CELL) * CELL; }
+
+function getCanvasPoint(ev) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: snap(ev.clientX - rect.left),
+    y: snap(ev.clientY - rect.top)
+  };
+}
+
+function isGroupSelected(id) {
+  return groupSelectionIds.includes(id);
+}
+
+function getBoundsForItems(ids = groupSelectionIds) {
+  const selected = items.filter(item => ids.includes(item.id));
+  if (!selected.length) return null;
+  return selected.reduce((acc, item) => {
+    const maxX = item.x + item.w * CELL;
+    const maxY = item.y + item.h * CELL;
+    return {
+      minX: Math.min(acc.minX, item.x),
+      minY: Math.min(acc.minY, item.y),
+      maxX: Math.max(acc.maxX, maxX),
+      maxY: Math.max(acc.maxY, maxY)
+    };
+  }, { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+}
+
+function updateEmptyInspector(message = DEFAULT_INSPECTOR_EMPTY) {
+  const empty = document.getElementById('inspectorEmpty');
+  const content = document.getElementById('inspectorContent');
+  empty.textContent = message;
+  empty.style.display = '';
+  content.style.display = 'none';
+}
+
+function clearGroupSelection() {
+  groupSelectionIds = [];
+  updateGroupOutline();
+  renderAll();
+  if (!selectedId) updateEmptyInspector();
+}
+
+function setGroupSelection(ids) {
+  groupSelectionIds = [...new Set(ids)];
+  selectedId = null;
+  renderAll();
+  updateGroupOutline();
+  if (groupSelectionIds.length) {
+    updateEmptyInspector(`Room move selection: ${groupSelectionIds.length} items. Drag the highlighted outline to reposition the whole room.`);
+  } else {
+    updateEmptyInspector(roomMoveMode ? 'Room move mode is on. Drag a box around a room to select its walls and contents.' : DEFAULT_INSPECTOR_EMPTY);
+  }
+}
+
+function updateRoomMoveButton() {
+  const btn = document.getElementById('roomMoveBtn');
+  btn.classList.toggle('active', roomMoveMode);
+  btn.textContent = roomMoveMode ? 'Room Move On' : 'Move Room';
+  btn.title = roomMoveMode ? 'Drag a box around a room, then drag the room outline to move it.' : 'Select and move an entire room.';
+  canvas.classList.toggle('room-move-active', roomMoveMode);
+  updateGroupOutline();
+}
+
+function hideRoomSelectionBox() {
+  const box = document.getElementById('roomSelectionBox');
+  box.style.display = 'none';
+}
+
+function updateRoomSelectionBox(x1, y1, x2, y2) {
+  const box = document.getElementById('roomSelectionBox');
+  const left = Math.min(x1, x2);
+  const top = Math.min(y1, y2);
+  const width = Math.max(CELL / 2, Math.abs(x2 - x1));
+  const height = Math.max(CELL / 2, Math.abs(y2 - y1));
+  box.style.display = 'block';
+  box.style.left = left + 'px';
+  box.style.top = top + 'px';
+  box.style.width = width + 'px';
+  box.style.height = height + 'px';
+}
+
+function updateGroupOutline() {
+  const outline = document.getElementById('roomGroupOutline');
+  const bounds = getBoundsForItems();
+  if (!roomMoveMode || !bounds) {
+    outline.style.display = 'none';
+    outline.dataset.label = '';
+    return;
+  }
+  outline.style.display = 'block';
+  outline.style.left = bounds.minX + 'px';
+  outline.style.top = bounds.minY + 'px';
+  outline.style.width = (bounds.maxX - bounds.minX) + 'px';
+  outline.style.height = (bounds.maxY - bounds.minY) + 'px';
+  outline.dataset.label = `${groupSelectionIds.length} items`;
+}
+
+function toggleRoomMoveMode(forceValue) {
+  roomMoveMode = typeof forceValue === 'boolean' ? forceValue : !roomMoveMode;
+  roomSelectionState = null;
+  groupDragState = null;
+  hideRoomSelectionBox();
+  if (!roomMoveMode) {
+    clearGroupSelection();
+  } else {
+    selectedId = null;
+    renderAll();
+    if (groupSelectionIds.length) {
+      updateEmptyInspector(`Room move selection: ${groupSelectionIds.length} items. Drag the highlighted outline to reposition the whole room.`);
+    } else {
+      updateEmptyInspector('Room move mode is on. Drag a box around a room to select its walls and contents.');
+    }
+  }
+  updateRoomMoveButton();
+}
+
+function renderItem(item) {
+  let el = document.getElementById('item-' + item.id);
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'floor-item';
+    el.id = 'item-' + item.id;
+    el.innerHTML = `<div class="item-body"><div class="item-label"></div></div><div class="resize-handle"></div><div class="delete-btn">×</div>`;
+    document.getElementById('canvas').appendChild(el);
+    el.addEventListener('mousedown', ev => onItemMouseDown(ev, item.id));
+    el.querySelector('.resize-handle').addEventListener('mousedown', ev => onResizeMouseDown(ev, item.id));
+    el.querySelector('.delete-btn').addEventListener('click', ev => { ev.stopPropagation(); deleteItem(item.id); });
+    el.addEventListener('click', ev => { ev.stopPropagation(); selectItem(item.id); });
+  }
+  el.style.left = item.x + 'px';
+  el.style.top = item.y + 'px';
+  el.style.width = item.w * CELL + 'px';
+  el.style.height = item.h * CELL + 'px';
+  el.style.zIndex = item.z || 1;
+  el.classList.toggle('selected', item.id === selectedId);
+  el.classList.toggle('grouped', isGroupSelected(item.id));
+  const body = el.querySelector('.item-body');
+  body.style.background = item.color || '#3a3830';
+  body.style.border = '1px solid ' + lightenHex(item.color || '#3a3830', 30);
+  const lbl = el.querySelector('.item-label');
+  lbl.textContent = item.name;
+  lbl.style.color = lightenHex(item.color || '#3a3830', 80);
+  return el;
+}
+
+function renderAll() {
+  items.forEach(renderItem);
+}
+
+// ── Drag from palette ──
+const canvasWrap = document.querySelector('.canvas-wrap');
+const canvas = document.getElementById('canvas');
+const roomGroupOutline = document.getElementById('roomGroupOutline');
+canvas.addEventListener('dragover', ev => ev.preventDefault());
+canvas.addEventListener('drop', ev => {
+  ev.preventDefault();
+  const raw = ev.dataTransfer.getData('artifact');
+  if (!raw) return;
+  const tmpl = JSON.parse(raw);
+  const rect = canvas.getBoundingClientRect();
+  const x = snap(ev.clientX - rect.left - (tmpl.w * CELL) / 2);
+  const y = snap(ev.clientY - rect.top - (tmpl.h * CELL) / 2);
+  addItem({ ...tmpl, x, y });
+});
+canvas.addEventListener('mousedown', onCanvasMouseDown);
+roomGroupOutline.addEventListener('mousedown', onGroupDragStart);
+canvasWrap.addEventListener('wheel', ev => {
+  if (!(ev.ctrlKey || ev.metaKey)) return;
+  ev.preventDefault();
+  applyZoom(zoomPercent + (ev.deltaY < 0 ? 10 : -10));
+}, { passive: false });
+
+function addItem(tmpl) {
+  const width = Math.max(1, Math.round(Number(tmpl.w) || 1));
+  const height = Math.max(1, Math.round(Number(tmpl.h) || 1));
+  const x = Number.isFinite(Number(tmpl.x)) ? snap(Number(tmpl.x)) : snap(40);
+  const y = Number.isFinite(Number(tmpl.y)) ? snap(Number(tmpl.y)) : snap(40);
+  const item = {
+    id: ++idCounter,
+    name: tmpl.name,
+    type: tmpl.type || tmpl.id,
+    desc: tmpl.desc,
+    x,
+    y,
+    w: width,
+    h: height,
+    color: tmpl.color || COLORS[idCounter % COLORS.length],
+    z: tmpl.z || 1,
+  };
+  constrainItemToGrid(item);
+  items.push(item);
+  renderItem(item);
+  selectItem(item.id);
+  return item;
+}
+
+// ── Drag items ──
+function onItemMouseDown(ev, id) {
+  if (ev.target.classList.contains('resize-handle') || ev.target.classList.contains('delete-btn')) return;
+  if (roomMoveMode) {
+    if (isGroupSelected(id)) onGroupDragStart(ev);
+    return;
+  }
+  ev.stopPropagation();
+  selectItem(id);
+  const item = items.find(i => i.id === id);
+  const point = getCanvasPoint(ev);
+  const startX = point.x - item.x;
+  const startY = point.y - item.y;
+  dragState = { id, startX, startY };
+  document.addEventListener('mousemove', onDragMove);
+  document.addEventListener('mouseup', onDragEnd);
+}
+function onDragMove(ev) {
+  if (!dragState) return;
+  const item = items.find(i => i.id === dragState.id);
+  const point = getCanvasPoint(ev);
+  item.x = snap(point.x - dragState.startX);
+  item.y = snap(point.y - dragState.startY);
+  constrainItemToGrid(item);
+  renderItem(item);
+  updateInspector(item);
+}
+function onDragEnd() {
+  dragState = null;
+  document.removeEventListener('mousemove', onDragMove);
+  document.removeEventListener('mouseup', onDragEnd);
+}
+
+// ── Resize ──
+function onResizeMouseDown(ev, id) {
+  if (roomMoveMode) return;
+  ev.stopPropagation();
+  const item = items.find(i => i.id === id);
+  const startX = ev.clientX, startY = ev.clientY;
+  const startW = item.w, startH = item.h;
+  resizeState = { id, startX, startY, startW, startH };
+  document.addEventListener('mousemove', onResizeMove);
+  document.addEventListener('mouseup', onResizeEnd);
+}
+function onResizeMove(ev) {
+  if (!resizeState) return;
+  const item = items.find(i => i.id === resizeState.id);
+  const dw = ev.clientX - resizeState.startX;
+  const dh = ev.clientY - resizeState.startY;
+  item.w = Math.max(1, Math.round((resizeState.startW * CELL + dw) / CELL));
+  item.h = Math.max(1, Math.round((resizeState.startH * CELL + dh) / CELL));
+  item.w = Math.min(item.w, gridWidth);
+  item.h = Math.min(item.h, gridHeight);
+  constrainItemToGrid(item);
+  renderItem(item);
+  updateInspector(item);
+}
+function onResizeEnd() {
+  resizeState = null;
+  document.removeEventListener('mousemove', onResizeMove);
+  document.removeEventListener('mouseup', onResizeEnd);
+}
+
+function onCanvasMouseDown(ev) {
+  if (!roomMoveMode) return;
+  if (ev.target.closest('.floor-item') || ev.target === roomGroupOutline) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  const point = getCanvasPoint(ev);
+  roomSelectionState = { startX: point.x, startY: point.y, currentX: point.x, currentY: point.y };
+  updateRoomSelectionBox(point.x, point.y, point.x, point.y);
+  document.addEventListener('mousemove', onRoomSelectionMove);
+  document.addEventListener('mouseup', onRoomSelectionEnd);
+}
+
+function onRoomSelectionMove(ev) {
+  if (!roomSelectionState) return;
+  const point = getCanvasPoint(ev);
+  roomSelectionState.currentX = point.x;
+  roomSelectionState.currentY = point.y;
+  updateRoomSelectionBox(roomSelectionState.startX, roomSelectionState.startY, point.x, point.y);
+}
+
+function intersectsSelection(item, rect) {
+  const itemRect = {
+    left: item.x,
+    top: item.y,
+    right: item.x + item.w * CELL,
+    bottom: item.y + item.h * CELL
+  };
+  return !(itemRect.right <= rect.left || itemRect.left >= rect.right || itemRect.bottom <= rect.top || itemRect.top >= rect.bottom);
+}
+
+function onRoomSelectionEnd() {
+  if (!roomSelectionState) return;
+  const rect = {
+    left: Math.min(roomSelectionState.startX, roomSelectionState.currentX),
+    top: Math.min(roomSelectionState.startY, roomSelectionState.currentY),
+    right: Math.max(roomSelectionState.startX, roomSelectionState.currentX),
+    bottom: Math.max(roomSelectionState.startY, roomSelectionState.currentY)
+  };
+  const width = rect.right - rect.left;
+  const height = rect.bottom - rect.top;
+  const ids = width < CELL && height < CELL
+    ? []
+    : items.filter(item => intersectsSelection(item, rect)).map(item => item.id);
+  setGroupSelection(ids);
+  roomSelectionState = null;
+  hideRoomSelectionBox();
+  document.removeEventListener('mousemove', onRoomSelectionMove);
+  document.removeEventListener('mouseup', onRoomSelectionEnd);
+  suppressCanvasClick = true;
+  setTimeout(() => { suppressCanvasClick = false; }, 0);
+}
+
+function onGroupDragStart(ev) {
+  if (!roomMoveMode || !groupSelectionIds.length) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  const bounds = getBoundsForItems();
+  if (!bounds) return;
+  const point = getCanvasPoint(ev);
+  groupDragState = {
+    startX: point.x,
+    startY: point.y,
+    bounds,
+    startPositions: groupSelectionIds.map(id => {
+      const item = items.find(entry => entry.id === id);
+      return { id, x: item.x, y: item.y };
+    })
+  };
+  document.addEventListener('mousemove', onGroupDragMove);
+  document.addEventListener('mouseup', onGroupDragEnd);
+}
+
+function onGroupDragMove(ev) {
+  if (!groupDragState) return;
+  const point = getCanvasPoint(ev);
+  const minDx = -groupDragState.bounds.minX;
+  const maxDx = gridWidth * CELL - groupDragState.bounds.maxX;
+  const minDy = -groupDragState.bounds.minY;
+  const maxDy = gridHeight * CELL - groupDragState.bounds.maxY;
+  const dx = Math.min(maxDx, Math.max(minDx, snap(point.x - groupDragState.startX)));
+  const dy = Math.min(maxDy, Math.max(minDy, snap(point.y - groupDragState.startY)));
+  groupDragState.startPositions.forEach(start => {
+    const item = items.find(entry => entry.id === start.id);
+    if (!item) return;
+    item.x = start.x + dx;
+    item.y = start.y + dy;
+    renderItem(item);
+  });
+  updateGroupOutline();
+}
+
+function onGroupDragEnd() {
+  if (!groupDragState) return;
+  groupDragState = null;
+  document.removeEventListener('mousemove', onGroupDragMove);
+  document.removeEventListener('mouseup', onGroupDragEnd);
+  suppressCanvasClick = true;
+  setTimeout(() => { suppressCanvasClick = false; }, 0);
+}
+
+// ── Selection ──
+function selectItem(id) {
+  if (roomMoveMode) return;
+  clearGroupSelection();
+  selectedId = id;
+  renderAll();
+  const item = items.find(i => i.id === id);
+  if (item) updateInspector(item);
+}
+function deselectAll(ev) {
+  if (suppressCanvasClick || roomMoveMode) return;
+  if (ev.target.id === 'canvas' || ev.target.id === 'gridCanvas') {
+    selectedId = null;
+    renderAll();
+    updateEmptyInspector();
+  }
+}
+function deleteItem(id) {
+  items = items.filter(i => i.id !== id);
+  groupSelectionIds = groupSelectionIds.filter(groupId => groupId !== id);
+  const el = document.getElementById('item-' + id);
+  if (el) el.remove();
+  if (selectedId === id) {
+    selectedId = null;
+    updateEmptyInspector();
+  }
+  updateGroupOutline();
+  renderAll();
+}
+function clearCanvas() {
+  items.forEach(i => { const el = document.getElementById('item-'+i.id); if(el) el.remove(); });
+  items = [];
+  selectedId = null;
+  groupSelectionIds = [];
+  updateGroupOutline();
+  updateEmptyInspector();
+  resetRenderedViews();
+  closeRenderPanel();
+}
+
+// ── Inspector ──
+const colorPalette = ['#4a5060','#3a5048','#5a4a38','#4a4858','#3a4848','#5a5038','#5a5650','#4a6a7a','#c47a6a','#8fa87a'];
+
+function updateInspector(item) {
+  document.getElementById('inspectorEmpty').style.display = 'none';
+  const cont = document.getElementById('inspectorContent');
+  cont.style.display = '';
+  cont.innerHTML = `
+    <div class="inspector-name">${item.name}</div>
+    <div class="inspector-desc">${item.desc}</div>
+    <div class="field-row">
+      <div class="field-label">Label</div>
+      <input class="field-input" id="insp-name" value="${item.name}" oninput="updateField(${item.id},'name',this.value)"/>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Notes</div>
+      <input class="field-input" id="insp-desc" value="${item.desc}" oninput="updateField(${item.id},'desc',this.value)" placeholder="Add notes…"/>
+    </div>
+    <div class="field-row dims-row">
+      <div>
+        <div class="field-label">Width (ft)</div>
+        <input class="field-input" type="number" min="1" value="${item.w}" oninput="updateField(${item.id},'w',+this.value)"/>
+      </div>
+      <div>
+        <div class="field-label">Depth (ft)</div>
+        <input class="field-input" type="number" min="1" value="${item.h}" oninput="updateField(${item.id},'h',+this.value)"/>
+      </div>
+    </div>
+    <div class="field-row dims-row">
+      <div>
+        <div class="field-label">X (ft)</div>
+        <input class="field-input" type="number" value="${Math.round(item.x/CELL)}" oninput="updateField(${item.id},'x',+this.value*${CELL})"/>
+      </div>
+      <div>
+        <div class="field-label">Y (ft)</div>
+        <input class="field-input" type="number" value="${Math.round(item.y/CELL)}" oninput="updateField(${item.id},'y',+this.value*${CELL})"/>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Area</div>
+      <div style="font-size:11px;color:var(--text2);padding:4px 0">${item.w * item.h} sq ft</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Color</div>
+      <div class="color-row" id="colorSwatches">
+        ${colorPalette.map(c=>`<div class="color-swatch${c===item.color?' active':''}" style="background:${c}" onclick="updateField(${item.id},'color','${c}');document.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('active'));this.classList.add('active')"></div>`).join('')}
+      </div>
+    </div>
+    <button class="rotate-btn" onclick="rotateItem(${item.id})">↻ Rotate 90°</button>
+    <button class="btn danger" style="width:100%;margin-top:8px" onclick="deleteItem(${item.id})">Delete</button>
+  `;
+}
+
+function updateField(id, field, value) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  item[field] = value;
+  if (field === 'w' || field === 'h') {
+    item.w = Math.min(gridWidth, Math.max(1, Math.round(Number(item.w) || 1)));
+    item.h = Math.min(gridHeight, Math.max(1, Math.round(Number(item.h) || 1)));
+  }
+  if (field === 'x' || field === 'y' || field === 'w' || field === 'h') {
+    constrainItemToGrid(item);
+  }
+  renderItem(item);
+  if (field !== 'name' && field !== 'desc' && field !== 'color') updateInspector(item);
+}
+
+function rotateItem(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  [item.w, item.h] = [item.h, item.w];
+  renderItem(item);
+  updateInspector(item);
+}
+
+// ── AI Generation ──
+function updateApiStatusButton() {
+  const btn = document.getElementById('apiStatusBtn');
+  btn.textContent = serverApiConfigured ? 'Server API Ready' : 'Server API Missing';
+  btn.title = serverApiConfigured
+    ? 'Codespaces server is configured with OPENAI_API_KEY.'
+    : 'Codespaces server is missing OPENAI_API_KEY.';
+}
+
+async function fetchApiStatus() {
+  try {
+    const res = await fetch(API_CONFIG_URL);
+    const data = await res.json();
+    serverApiConfigured = !!data.configured;
+  } catch (_err) {
+    serverApiConfigured = false;
+  }
+  updateApiStatusButton();
+  setRenderButtonState();
+}
+
+function showApiStatus() {
+  if (serverApiConfigured) {
+    alert('The Codespaces server is configured. Shared users can use the floorplan without entering an API key.');
+  } else {
+    alert('The Codespaces server is missing OPENAI_API_KEY. The repo owner needs to add that secret to Codespaces before the app can call OpenAI.');
+  }
+}
+
+async function generateFloorplan() {
+  const prompt = document.getElementById('promptInput').value.trim();
+  if (!prompt) return;
+
+  if (!serverApiConfigured) {
+    alert('The Codespaces server does not have OPENAI_API_KEY configured yet.');
+    return;
+  }
+
+  const overlay = document.getElementById('loadingOverlay');
+  const sub = document.getElementById('loadingSub');
+  overlay.classList.add('visible');
+  sub.textContent = 'Analyzing description…';
+
+  const subs = ['Calculating dimensions…','Placing walls…','Adding fixtures…','Arranging furniture…','Finalizing layout…'];
+  let si = 0;
+  const ticker = setInterval(() => { sub.textContent = subs[Math.min(si++, subs.length-1)]; }, 1200);
+
+  try {
+    const res = await fetch(API_FLOORPLAN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        prompt,
+        gridWidth,
+        gridHeight
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const message = data.error?.message || `OpenAI request failed with status ${res.status}`;
+      throw new Error(message);
+    }
+
+    const plan = data?.items;
+    if (!Array.isArray(plan)) {
+      throw new Error('OpenAI response was not a valid floor plan payload.');
+    }
+
+    clearCanvas();
+    plan.forEach(tmpl => addItem({
+      ...tmpl,
+      id: tmpl.type || tmpl.id,
+      x: Number(tmpl.x) * CELL,
+      y: Number(tmpl.y) * CELL
+    }));
+    selectedId = null;
+    renderAll();
+    document.getElementById('inspectorEmpty').style.display = '';
+    document.getElementById('inspectorContent').style.display = 'none';
+  } catch (err) {
+    alert('Generation failed. Please try again.\n' + err.message);
+  } finally {
+    clearInterval(ticker);
+    overlay.classList.remove('visible');
+  }
+}
+
+document.getElementById('promptInput').addEventListener('keydown', ev => {
+  if (ev.key === 'Enter') generateFloorplan();
+});
+
+document.getElementById('gridWidthInput').addEventListener('change', ev => {
+  applyGridSize(Number(ev.target.value) || DEFAULT_GRID_WIDTH, gridHeight);
+});
+
+document.getElementById('gridHeightInput').addEventListener('change', ev => {
+  applyGridSize(gridWidth, Number(ev.target.value) || DEFAULT_GRID_HEIGHT);
+});
+
+document.getElementById('zoomInput').addEventListener('change', ev => {
+  applyZoom(Number(ev.target.value) || DEFAULT_ZOOM);
+});
+
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && roomMoveMode) {
+    toggleRoomMoveMode(false);
+  }
+});
+
+// ── Export ──
+function exportPNG() {
+  const c = document.getElementById('canvas');
+  const w = c.clientWidth, h = c.clientHeight;
+  const exp = document.createElement('canvas');
+  exp.width = w; exp.height = h;
+  const ctx = exp.getContext('2d');
+  ctx.fillStyle = '#0f0e0c'; ctx.fillRect(0,0,w,h);
+  // draw grid
+  ctx.strokeStyle = '#1e1d1b'; ctx.lineWidth = 1;
+  for (let x=0; x<w; x+=CELL) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+  for (let y=0; y<h; y+=CELL) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  ctx.strokeStyle = '#2a2926';
+  for (let x=0; x<w; x+=CELL*5) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+  for (let y=0; y<h; y+=CELL*5) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  // draw items
+  items.forEach(item => {
+    ctx.fillStyle = item.color || '#3a3830';
+    const rx = 3;
+    const x=item.x, y=item.y, iw=item.w*CELL, ih=item.h*CELL;
+    ctx.beginPath();
+    ctx.moveTo(x+rx,y); ctx.lineTo(x+iw-rx,y); ctx.arcTo(x+iw,y,x+iw,y+rx,rx);
+    ctx.lineTo(x+iw,y+ih-rx); ctx.arcTo(x+iw,y+ih,x+iw-rx,y+ih,rx);
+    ctx.lineTo(x+rx,y+ih); ctx.arcTo(x,y+ih,x,y+ih-rx,rx);
+    ctx.lineTo(x,y+rx); ctx.arcTo(x,y,x+rx,y,rx);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = lightenHex(item.color||'#3a3830', 30); ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = lightenHex(item.color||'#3a3830', 80);
+    ctx.font = '9px DM Mono, monospace'; ctx.textAlign = 'center';
+    ctx.fillText(item.name, x+iw/2, y+ih-4);
+  });
+  const url = exp.toDataURL();
+  const a = document.createElement('a'); a.href = url; a.download = 'floorplan.png'; a.click();
+}
+
+// ── Init ──
+buildPalette();
+initRenderGrid();
+resetRenderedViews();
+updateApiStatusButton();
+setRenderButtonState();
+updateRoomMoveButton();
+updateGridInputs();
+updateZoomInput();
+updateCanvasSize();
+updateEmptyInspector();
+fetchApiStatus();
+window.addEventListener('resize', () => {
+  updateCanvasSize();
+  drawGrid();
+  drawRulers();
+  updateGroupOutline();
+});
+setTimeout(() => {
+  updateCanvasSize();
+  drawGrid();
+  drawRulers();
+  updateGroupOutline();
+}, 50);
+</script>
+</body>
+</html>

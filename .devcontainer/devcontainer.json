@@ -1,0 +1,19 @@
+{
+  "name": "FloorCraft Codespaces",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "FloorCraft",
+      "onAutoForward": "openPreview"
+    }
+  },
+  "postStartCommand": "bash .devcontainer/post-start.sh",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "files.autoSave": "afterDelay"
+      }
+    }
+  }
+}

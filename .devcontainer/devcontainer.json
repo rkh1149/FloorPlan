@@ -1,9 +1,9 @@
 {
   "name": "FloorCraft Codespaces",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
-  "forwardPorts": [3000],
+  "forwardPorts": [3002],
   "portsAttributes": {
-    "3000": {
+    "3002": {
       "label": "FloorCraft",
       "onAutoForward": "openPreview"
     }

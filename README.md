@@ -7,7 +7,7 @@ This version is set up so users can open the Codespace URL and use the app witho
 1. Push this folder to a GitHub repository.
 2. In GitHub, add a Codespaces secret named `OPENAI_API_KEY`.
 3. Create a Codespace for the repo.
-4. Wait for the Codespace to start. It will auto-run the local Node server on port `3000`.
+4. Wait for the Codespace to start. It will auto-run the local Node server on port `3002`.
 5. Open the forwarded Codespaces preview URL. The app is served at `/` and also at `/floorplan-builder.html`.
 
 ## What other users do

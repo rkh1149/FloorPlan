@@ -8,7 +8,11 @@
       "onAutoForward": "openPreview"
     }
   },
+  "remoteEnv": {
+    "PORT": "3002"
+  },
   "postStartCommand": "bash .devcontainer/post-start.sh",
+  "postAttachCommand": "bash .devcontainer/post-start.sh",
   "customizations": {
     "vscode": {
       "settings": {

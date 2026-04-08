@@ -429,7 +429,8 @@ function resolveItemZ(item) {
   const numericZ = Number.isFinite(Number(item?.z)) ? Number(item.z) : null;
   if (isBackgroundArtifact(item?.type)) {
     const area = Math.max(1, Math.round((Number(item?.w) || 1) * (Number(item?.h) || 1)));
-    return numericZ === null ? -area : Math.min(-area, numericZ);
+    const layeredZ = Math.max(1, 1000 - area);
+    return numericZ === null ? layeredZ : Math.max(1, Math.min(layeredZ, numericZ));
   }
   return numericZ === null ? 1 : Math.max(1, numericZ);
 }

@@ -17,7 +17,12 @@ const FLOORPLAN_TYPE_IDS = [
   'queen-bed', 'king-bed', 'twin-bed', 'dresser', 'nightstand', 'wardrobe', 'desk',
   'counter', 'island', 'stove', 'fridge', 'd-table',
   'toilet', 'sink', 'shower', 'bathtub', 'dbl-sink',
-  'room', 'closet', 'laundry', 'plant'
+  'room', 'closet', 'laundry', 'plant',
+  'loft', 'hallway', 'foyer', 'pantry', 'mudroom', 'office', 'garage', 'balcony', 'patio', 'utility-room',
+  'sectional-sofa', 'loveseat', 'ottoman', 'accent-chair', 'console-table',
+  'bunk-bed', 'bedroom-bench', 'vanity-table', 'crib',
+  'bar-stools', 'kitchen-sink', 'dishwasher', 'microwave', 'washer', 'dryer',
+  'linen-cabinet', 'towel-rack', 'outdoor-table', 'outdoor-chair', 'closet-island'
 ];
 
 const FLOORPLAN_RESPONSE_FORMAT = {

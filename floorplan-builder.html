@@ -182,7 +182,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
       <span>%</span>
     </div>
     <button class="btn secondary" id="apiStatusBtn" onclick="showApiStatus()">Server API</button>
-    <button class="btn secondary" id="renderViewsBtn" onclick="renderFourViews()">Render View</button>
+    <button class="btn secondary" id="renderViewsBtn" onclick="renderView()">Render View</button>
     <button class="btn secondary" id="roomMoveBtn" onclick="toggleRoomMoveMode()">Move Room</button>
     <button class="btn secondary" onclick="saveFloorplan()">Save Plan</button>
     <button class="btn secondary" onclick="openFloorplanFile()">Open Plan</button>
@@ -214,10 +214,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   <div class="scale-badge" id="scaleBadge">1 cell = 1 ft</div>
   <div class="render-panel" id="renderPanel">
     <div class="render-panel-header">
-      <div class="render-panel-title">Photoreal Views</div>
+      <div class="render-panel-title">Rendered View</div>
       <button class="btn secondary" onclick="closeRenderPanel()">Close</button>
     </div>
-    <div class="render-panel-note">AI-generated architectural interpretations of the current floorplan from the north, south, east, and west sides.</div>
+    <div class="render-panel-note">A single AI-generated architectural render based on the current FloorCraft grid, using the actual floorplan layout as a reference image.</div>
     <div class="render-grid" id="renderGrid"></div>
   </div>
 </main>
@@ -247,12 +247,11 @@ const API_CONFIG_URL = '/api/config';
 const API_FLOORPLAN_URL = '/api/generate-floorplan';
 const API_RENDER_VIEW_URL = '/api/render-view';
 const DEFAULT_INSPECTOR_EMPTY = 'Select an item on the canvas to view and edit its properties.';
-const CARDINAL_VIEWS = [
-  { id: 'north', label: 'North View', camera: 'viewed from the north side looking south across the full floor plan' },
-  { id: 'south', label: 'South View', camera: 'viewed from the south side looking north across the full floor plan' },
-  { id: 'east', label: 'East View', camera: 'viewed from the east side looking west across the full floor plan' },
-  { id: 'west', label: 'West View', camera: 'viewed from the west side looking east across the full floor plan' }
-];
+const PRIMARY_RENDER_VIEW = {
+  id: 'plan',
+  label: 'Rendered Plan',
+  camera: 'in a top-down isometric dollhouse view aligned to the current floor plan grid'
+};
 const FLOORPLAN_TYPE_IDS = [
   'wall-h', 'wall-v', 'ext-wall-h', 'ext-wall-v', 'door', 'window', 'sliding', 'stairs',
   'sofa', 'armchair', 'coffee-tbl', 'tv-unit', 'bookshelf', 'fireplace',
@@ -548,19 +547,19 @@ function applyZoom(nextZoomPercent) {
 
 function initRenderGrid() {
   const grid = document.getElementById('renderGrid');
-  grid.innerHTML = CARDINAL_VIEWS.map(view => `
-    <div class="render-card" id="render-card-${view.id}">
+  grid.innerHTML = `
+    <div class="render-card" id="render-card-${PRIMARY_RENDER_VIEW.id}">
       <div class="render-card-header">
-        <div class="render-card-title">${view.label}</div>
+        <div class="render-card-title">${PRIMARY_RENDER_VIEW.label}</div>
       </div>
-      <div class="render-card-body" id="render-body-${view.id}">
-        <div class="render-placeholder">Generate a render to preview this direction.</div>
+      <div class="render-card-body" id="render-body-${PRIMARY_RENDER_VIEW.id}">
+        <div class="render-placeholder">Generate a render to preview this floor plan.</div>
       </div>
       <div class="render-actions">
-        <button class="btn secondary" id="download-${view.id}" onclick="downloadRenderedView('${view.id}')" disabled>Download</button>
+        <button class="btn secondary" id="download-${PRIMARY_RENDER_VIEW.id}" onclick="downloadRenderedView('${PRIMARY_RENDER_VIEW.id}')" disabled>Download</button>
       </div>
     </div>
-  `).join('');
+  `;
 }
 
 function openRenderPanel() {
@@ -573,13 +572,11 @@ function closeRenderPanel() {
 
 function resetRenderedViews() {
   renderedViews = {};
-  CARDINAL_VIEWS.forEach(view => {
-    setRenderedViewState(view.id, {
-      label: view.label,
-      status: 'idle',
-      imageUrl: '',
-      message: 'Generate a render to preview this direction.'
-    });
+  setRenderedViewState(PRIMARY_RENDER_VIEW.id, {
+    label: PRIMARY_RENDER_VIEW.label,
+    status: 'idle',
+    imageUrl: '',
+    message: 'Generate a render to preview this floor plan.'
   });
 }
 
@@ -618,17 +615,18 @@ function floorplanItemsForPrompt() {
     .join('\n');
 }
 
-function buildViewRenderPrompt(view) {
+function buildViewRenderPrompt(view = PRIMARY_RENDER_VIEW) {
   const userPrompt = document.getElementById('promptInput').value.trim();
   const floorplanSummary = floorplanItemsForPrompt();
-  return `Create a single photorealistic architectural cutaway render of this floor plan, ${view.camera}. Show the entire layout in one image as a realistic renovation concept visualization, not a 2D blueprint.
+  return `Create a single photorealistic architectural render of this floor plan, ${view.camera}. Show the entire layout in one image as a realistic renovation concept visualization, not a 2D blueprint.
 
 Requirements:
-- Preserve the room adjacencies, furniture placement, doors, windows, and overall proportions from the plan.
-- Respect the exact artifact positions on the grid when composing the layout.
-- Use a dollhouse-style cutaway or open-wall architectural view so the whole plan is visible from this side.
+- Use the attached floor plan reference image as the primary layout source of truth.
+- Preserve the exact room adjacencies, artifact placement, artifact orientation, doors, windows, and overall proportions from the plan.
+- Respect the exact artifact positions on the grid when composing the layout. Do not swap rooms, move furniture, or invent additional fixtures.
+- Use a top-down isometric dollhouse or cutaway architectural view so the whole plan stays visible and directly correlated to the source grid.
 - Make it feel photo realistic with natural materials, accurate lighting, realistic shadows, and believable scale.
-- Keep the camera wide enough to see the full plan from this cardinal direction.
+- Keep the camera wide enough to see the full plan in one frame.
 - Do not add people, labels, dimensions, or watermark text.
 
 Floor plan size: ${gridWidth} ft wide x ${gridHeight} ft deep.
@@ -657,7 +655,8 @@ async function generateRenderedView(view) {
     },
     body: JSON.stringify({
       viewId: view.id,
-      prompt: buildViewRenderPrompt(view)
+      prompt: buildViewRenderPrompt(view),
+      referenceImageDataUrl: createRenderReferenceImageDataUrl()
     })
   });
 
@@ -678,9 +677,9 @@ async function generateRenderedView(view) {
   });
 }
 
-async function renderFourViews() {
+async function renderView() {
   if (!items.length) {
-    alert('Add or generate a floorplan first, then render the four views.');
+    alert('Add or generate a floorplan first, then render the view.');
     return;
   }
 
@@ -693,28 +692,21 @@ async function renderFourViews() {
   renderingViews = true;
   setRenderButtonState();
 
-  CARDINAL_VIEWS.forEach(view => {
-    setRenderedViewState(view.id, {
-      label: view.label,
-      status: 'idle',
-      imageUrl: '',
-      message: 'Waiting to render…'
-    });
+  setRenderedViewState(PRIMARY_RENDER_VIEW.id, {
+    label: PRIMARY_RENDER_VIEW.label,
+    status: 'loading',
+    imageUrl: '',
+    message: 'Rendering the current floor plan…'
   });
 
   try {
-    for (const view of CARDINAL_VIEWS) {
-      await generateRenderedView(view);
-    }
+    await generateRenderedView(PRIMARY_RENDER_VIEW);
   } catch (err) {
-    const pendingView = CARDINAL_VIEWS.find(view => !renderedViews[view.id]?.imageUrl && renderedViews[view.id]?.status !== 'error');
-    if (pendingView) {
-      setRenderedViewState(pendingView.id, {
-        label: pendingView.label,
-        status: 'error',
-        message: err.message
-      });
-    }
+    setRenderedViewState(PRIMARY_RENDER_VIEW.id, {
+      label: PRIMARY_RENDER_VIEW.label,
+      status: 'error',
+      message: err.message
+    });
     alert('View rendering failed.\n' + err.message);
   } finally {
     renderingViews = false;
@@ -1297,6 +1289,57 @@ function readFloorplanFile(file) {
     alert('Open plan failed.\nThe selected file could not be read.');
   };
   reader.readAsText(file);
+}
+
+function createFloorplanSnapshotCanvas() {
+  const c = document.getElementById('canvas');
+  const w = c.clientWidth;
+  const h = c.clientHeight;
+  const snapshot = document.createElement('canvas');
+  snapshot.width = w;
+  snapshot.height = h;
+  const ctx = snapshot.getContext('2d');
+  const rootStyles = getComputedStyle(document.documentElement);
+
+  ctx.fillStyle = rootStyles.getPropertyValue('--bg').trim();
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.strokeStyle = rootStyles.getPropertyValue('--grid').trim();
+  ctx.lineWidth = 1;
+  for (let x = 0; x < w; x += CELL) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+  for (let y = 0; y < h; y += CELL) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+  ctx.strokeStyle = rootStyles.getPropertyValue('--grid-strong').trim();
+  for (let x = 0; x < w; x += CELL * 5) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+  for (let y = 0; y < h; y += CELL * 5) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+  items.forEach(item => {
+    const x = item.x;
+    const y = item.y;
+    const iw = item.w * CELL;
+    const ih = item.h * CELL;
+    const fill = item.color || '#3a3830';
+    const stroke = lightenHex(fill, 30);
+
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, iw, ih);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, iw, ih);
+
+    ctx.fillStyle = '#fffaf1';
+    ctx.font = '10px DM Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(item.name, x + iw / 2, y + Math.max(14, ih / 2 - 2));
+    ctx.fillStyle = '#2e271d';
+    ctx.fillText(`${item.w}x${item.h} ft`, x + iw / 2, y + Math.max(26, ih / 2 + 10));
+  });
+
+  return snapshot;
+}
+
+function createRenderReferenceImageDataUrl() {
+  return createFloorplanSnapshotCanvas().toDataURL('image/png');
 }
 
 // ── Inspector ──

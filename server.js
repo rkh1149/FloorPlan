@@ -6,6 +6,7 @@ const PORT = Number(process.env.PORT || 3002);
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const RESPONSES_API_URL = 'https://api.openai.com/v1/responses';
 const IMAGES_API_URL = 'https://api.openai.com/v1/images/generations';
+const IMAGES_EDITS_API_URL = 'https://api.openai.com/v1/images/edits';
 const FLOORPLAN_MODEL = 'gpt-4o-mini';
 const RENDER_MODEL = 'gpt-image-1-mini';
 const FLOORPLAN_HTML_PATH = path.join(__dirname, 'floorplan-builder.html');
@@ -116,6 +117,12 @@ function extractResponseText(data) {
   return parts.join('').trim();
 }
 
+function dataUrlToBlob(dataUrl) {
+  const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  return new Blob([Buffer.from(match[2], 'base64')], { type: match[1] });
+}
+
 function floorplanSystemPrompt(gridWidth, gridHeight) {
   return `You are an expert floor plan generator. The user describes a space and you output a JSON array of items to place on a grid-based floor plan.
 
@@ -201,27 +208,53 @@ async function handleGenerateFloorplan(req, res) {
 async function handleRenderView(req, res) {
   if (!requireApiKey(res)) return;
 
-  const { prompt, viewId } = await readJson(req);
+  const { prompt, viewId, referenceImageDataUrl } = await readJson(req);
   if (!prompt || !String(prompt).trim()) {
     sendJson(res, 400, { error: 'A render prompt is required.' });
     return;
   }
 
-  const openaiRes = await fetch(IMAGES_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: RENDER_MODEL,
-      prompt: String(prompt).trim(),
-      size: '1536x1024',
-      quality: 'medium',
-      background: 'opaque',
-      output_format: 'png'
-    })
-  });
+  let openaiRes;
+  if (referenceImageDataUrl) {
+    const referenceBlob = dataUrlToBlob(referenceImageDataUrl);
+    if (!referenceBlob) {
+      sendJson(res, 400, { error: 'The render reference image was invalid.', viewId });
+      return;
+    }
+
+    const form = new FormData();
+    form.append('model', RENDER_MODEL);
+    form.append('prompt', String(prompt).trim());
+    form.append('size', '1536x1024');
+    form.append('quality', 'medium');
+    form.append('background', 'opaque');
+    form.append('output_format', 'png');
+    form.append('image[]', referenceBlob, 'floorplan-reference.png');
+
+    openaiRes = await fetch(IMAGES_EDITS_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: form
+    });
+  } else {
+    openaiRes = await fetch(IMAGES_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: RENDER_MODEL,
+        prompt: String(prompt).trim(),
+        size: '1536x1024',
+        quality: 'medium',
+        background: 'opaque',
+        output_format: 'png'
+      })
+    });
+  }
 
   const openaiData = await openaiRes.json();
   if (!openaiRes.ok) {

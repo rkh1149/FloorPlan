@@ -1213,13 +1213,14 @@ function buildFloorplanSnapshot() {
   };
 }
 
-function saveFloorplan() {
+async function saveFloorplan() {
   const snapshot = buildFloorplanSnapshot();
   const stamp = snapshot.savedAt.slice(0, 10);
   const filename = `floorcraft-plan-${stamp}.floorcraft`;
   const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/x-floorcraft+json' });
   if (window.showSaveFilePicker) {
-    window.showSaveFilePicker({
+    try {
+      const handle = await window.showSaveFilePicker({
       suggestedName: filename,
       types: [{
         description: 'FloorCraft Plan',
@@ -1227,28 +1228,23 @@ function saveFloorplan() {
           'application/x-floorcraft+json': ['.floorcraft']
         }
       }]
-    }).then(async handle => {
+      });
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
-    }).catch(err => {
+    } catch (err) {
       if (err && err.name === 'AbortError') return;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    });
+      alert('Save Plan failed.\n' + (err.message || 'The browser could not open the save dialog.'));
+    }
     return;
   }
-
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  alert('This browser does not support the native save dialog, so the plan was downloaded instead.\nUse Chrome or Edge if you want to choose a specific save location for .floorcraft files.');
 }
 
 function openFloorplanFile() {

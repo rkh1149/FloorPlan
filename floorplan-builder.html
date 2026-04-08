@@ -638,7 +638,7 @@ ${floorplanSummary}`;
 }
 
 function extractGeneratedImage(responseData) {
-  return responseData?.data?.[0]?.b64_json || null;
+  return responseData?.imageBase64 || responseData?.data?.[0]?.b64_json || null;
 }
 
 async function generateRenderedView(view) {

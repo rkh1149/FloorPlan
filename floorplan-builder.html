@@ -428,7 +428,8 @@ function isBackgroundArtifact(type) {
 function resolveItemZ(item) {
   const numericZ = Number.isFinite(Number(item?.z)) ? Number(item.z) : null;
   if (isBackgroundArtifact(item?.type)) {
-    return numericZ === null ? 0 : Math.min(0, numericZ);
+    const area = Math.max(1, Math.round((Number(item?.w) || 1) * (Number(item?.h) || 1)));
+    return numericZ === null ? -area : Math.min(-area, numericZ);
   }
   return numericZ === null ? 1 : Math.max(1, numericZ);
 }
@@ -954,6 +955,37 @@ function getBoundsForItems(ids = groupSelectionIds) {
   }, { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
 }
 
+function getItemRect(item) {
+  return {
+    left: item.x,
+    top: item.y,
+    right: item.x + item.w * CELL,
+    bottom: item.y + item.h * CELL
+  };
+}
+
+function isRectContained(inner, outer) {
+  return inner.left >= outer.left &&
+    inner.top >= outer.top &&
+    inner.right <= outer.right &&
+    inner.bottom <= outer.bottom;
+}
+
+function getRoomSelectionIds(roomId) {
+  const room = items.find(item => item.id === roomId);
+  if (!room) return [];
+  const roomRect = getItemRect(room);
+  return items
+    .filter(item => item.id === roomId || isRectContained(getItemRect(item), roomRect))
+    .map(item => item.id);
+}
+
+function selectionMatches(ids) {
+  if (ids.length !== groupSelectionIds.length) return false;
+  const current = new Set(groupSelectionIds);
+  return ids.every(id => current.has(id));
+}
+
 function updateEmptyInspector(message = DEFAULT_INSPECTOR_EMPTY) {
   const empty = document.getElementById('inspectorEmpty');
   const content = document.getElementById('inspectorContent');
@@ -1131,6 +1163,18 @@ function addItem(tmpl) {
 function onItemMouseDown(ev, id) {
   if (ev.target.classList.contains('resize-handle') || ev.target.classList.contains('delete-btn')) return;
   if (roomMoveMode) {
+    const item = items.find(i => i.id === id);
+    if (item && isBackgroundArtifact(item.type)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const roomSelectionIds = getRoomSelectionIds(id);
+      if (selectionMatches(roomSelectionIds)) {
+        onGroupDragStart(ev);
+      } else {
+        setGroupSelection(roomSelectionIds);
+      }
+      return;
+    }
     if (isGroupSelected(id)) onGroupDragStart(ev);
     return;
   }

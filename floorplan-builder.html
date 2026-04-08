@@ -182,7 +182,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
       <span>%</span>
     </div>
     <button class="btn secondary" id="apiStatusBtn" onclick="showApiStatus()">Server API</button>
-    <button class="btn secondary" id="renderViewsBtn" onclick="renderFourViews()">Render 4 Views</button>
+    <button class="btn secondary" id="renderViewsBtn" onclick="renderFourViews()">Render View</button>
     <button class="btn secondary" id="roomMoveBtn" onclick="toggleRoomMoveMode()">Move Room</button>
     <button class="btn secondary" onclick="saveFloorplan()">Save Plan</button>
     <button class="btn secondary" onclick="openFloorplanFile()">Open Plan</button>
@@ -586,7 +586,7 @@ function resetRenderedViews() {
 function setRenderButtonState() {
   const btn = document.getElementById('renderViewsBtn');
   btn.disabled = renderingViews || !serverApiConfigured;
-  btn.textContent = renderingViews ? 'Rendering Views…' : 'Render 4 Views';
+  btn.textContent = renderingViews ? 'Rendering View…' : 'Render View';
 }
 
 function setRenderedViewState(id, state) {
@@ -614,26 +614,28 @@ function floorplanItemsForPrompt() {
   return items
     .slice()
     .sort((a, b) => (a.y - b.y) || (a.x - b.x))
-    .map(item => `- ${item.name} [${item.type}] at (${Math.round(item.x / CELL)} ft, ${Math.round(item.y / CELL)} ft), size ${item.w} ft x ${item.h} ft`)
+    .map(item => `- ${item.name} [${item.type}] positioned at x=${Math.round(item.x / CELL)} ft, y=${Math.round(item.y / CELL)} ft; footprint=${item.w} ft x ${item.h} ft; color=${item.color || 'default'}`)
     .join('\n');
 }
 
 function buildViewRenderPrompt(view) {
-  const designIntent = document.getElementById('promptInput').value.trim();
+  const userPrompt = document.getElementById('promptInput').value.trim();
   const floorplanSummary = floorplanItemsForPrompt();
   return `Create a single photorealistic architectural cutaway render of this floor plan, ${view.camera}. Show the entire layout in one image as a realistic renovation concept visualization, not a 2D blueprint.
 
 Requirements:
 - Preserve the room adjacencies, furniture placement, doors, windows, and overall proportions from the plan.
+- Respect the exact artifact positions on the grid when composing the layout.
 - Use a dollhouse-style cutaway or open-wall architectural view so the whole plan is visible from this side.
 - Make it feel photo realistic with natural materials, accurate lighting, realistic shadows, and believable scale.
 - Keep the camera wide enough to see the full plan from this cardinal direction.
 - Do not add people, labels, dimensions, or watermark text.
 
 Floor plan size: ${gridWidth} ft wide x ${gridHeight} ft deep.
-Design intent: ${designIntent || 'No extra style notes were provided, so use a polished contemporary residential finish palette.'}
+Original user brief entered in FloorCraft:
+${userPrompt || 'No extra style notes were provided, so use a polished contemporary residential finish palette.'}
 
-Floor plan contents:
+Placed artifacts with exact grid positions:
 ${floorplanSummary}`;
 }
 

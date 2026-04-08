@@ -126,6 +126,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .field-label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); }
 .field-input { background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 6px 10px; outline: none; width: 100%; transition: border-color .2s; }
 .field-input:focus { border-color: var(--accent); }
+.field-input.invalid { border-color: var(--danger); color: var(--danger); }
 .dims-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .color-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .color-swatch { width: 20px; height: 20px; border-radius: 4px; cursor: pointer; border: 2px solid transparent; transition: border-color .15s; }
@@ -1565,21 +1566,21 @@ function updateInspector(item) {
     <div class="field-row dims-row">
       <div>
         <div class="field-label">Width (ft)</div>
-        <input class="field-input" type="number" min="0.1" step="0.1" value="${formatFeet(item.w)}" oninput="updateField(${item.id},'w',+this.value)"/>
+        <input class="field-input" type="text" inputmode="decimal" value="${formatFeet(item.w)}" oninput="validateNumericDraft(this,false)" onkeydown="handleNumericFieldKeydown(event,${item.id},'w',this,false,false)" onblur="commitNumericField(${item.id},'w',this,false,false)"/>
       </div>
       <div>
         <div class="field-label">Depth (ft)</div>
-        <input class="field-input" type="number" min="0.1" step="0.1" value="${formatFeet(item.h)}" oninput="updateField(${item.id},'h',+this.value)"/>
+        <input class="field-input" type="text" inputmode="decimal" value="${formatFeet(item.h)}" oninput="validateNumericDraft(this,false)" onkeydown="handleNumericFieldKeydown(event,${item.id},'h',this,false,false)" onblur="commitNumericField(${item.id},'h',this,false,false)"/>
       </div>
     </div>
     <div class="field-row dims-row">
       <div>
         <div class="field-label">X (ft)</div>
-        <input class="field-input" type="number" step="0.1" value="${formatFeet(item.x/CELL)}" oninput="updateField(${item.id},'x',+this.value*${CELL})"/>
+        <input class="field-input" type="text" inputmode="decimal" value="${formatFeet(item.x/CELL)}" oninput="validateNumericDraft(this,true)" onkeydown="handleNumericFieldKeydown(event,${item.id},'x',this,true,true)" onblur="commitNumericField(${item.id},'x',this,true,true)"/>
       </div>
       <div>
         <div class="field-label">Y (ft)</div>
-        <input class="field-input" type="number" step="0.1" value="${formatFeet(item.y/CELL)}" oninput="updateField(${item.id},'y',+this.value*${CELL})"/>
+        <input class="field-input" type="text" inputmode="decimal" value="${formatFeet(item.y/CELL)}" oninput="validateNumericDraft(this,true)" onkeydown="handleNumericFieldKeydown(event,${item.id},'y',this,true,true)" onblur="commitNumericField(${item.id},'y',this,true,true)"/>
       </div>
     </div>
     <div class="field-row">
@@ -1610,6 +1611,53 @@ function updateField(id, field, value) {
   }
   renderItem(item);
   if (field !== 'name' && field !== 'desc' && field !== 'color') updateInspector(item);
+}
+
+function isValidTenthValue(rawValue, allowZero = false) {
+  const raw = String(rawValue || '').trim();
+  if (!/^\d+(\.\d)?$/.test(raw)) return false;
+  const num = Number(raw);
+  return allowZero ? num >= 0 : num >= 0.1;
+}
+
+function validateNumericDraft(input, allowZero = false) {
+  const raw = String(input.value || '').trim();
+  const valid = raw === '' ? false : isValidTenthValue(raw, allowZero);
+  input.classList.toggle('invalid', !valid);
+  return valid;
+}
+
+function resetNumericFieldValue(id, field, input, useCanvasScale = false) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  const currentValue = useCanvasScale ? item[field] / CELL : item[field];
+  input.value = formatFeet(currentValue);
+  input.classList.remove('invalid');
+}
+
+function commitNumericField(id, field, input, allowZero = false, useCanvasScale = false) {
+  const raw = String(input.value || '').trim();
+  if (!isValidTenthValue(raw, allowZero)) {
+    input.classList.add('invalid');
+    return false;
+  }
+  input.classList.remove('invalid');
+  const numericValue = Number(raw);
+  updateField(id, field, useCanvasScale ? numericValue * CELL : numericValue);
+  return true;
+}
+
+function handleNumericFieldKeydown(event, id, field, input, allowZero = false, useCanvasScale = false) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    commitNumericField(id, field, input, allowZero, useCanvasScale);
+    return;
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    resetNumericFieldValue(id, field, input, useCanvasScale);
+    return;
+  }
 }
 
 function rotateItem(id) {

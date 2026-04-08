@@ -416,6 +416,23 @@ function getCatalogEntry(...keys) {
   return null;
 }
 
+const BACKGROUND_ARTIFACT_TYPES = new Set([
+  'room', 'closet', 'loft', 'hallway', 'foyer', 'pantry', 'mudroom',
+  'office', 'garage', 'balcony', 'patio', 'utility-room'
+]);
+
+function isBackgroundArtifact(type) {
+  return BACKGROUND_ARTIFACT_TYPES.has(String(type || '').trim());
+}
+
+function resolveItemZ(item) {
+  const numericZ = Number.isFinite(Number(item?.z)) ? Number(item.z) : null;
+  if (isBackgroundArtifact(item?.type)) {
+    return numericZ === null ? 0 : Math.min(0, numericZ);
+  }
+  return numericZ === null ? 1 : Math.max(1, numericZ);
+}
+
 // SVG icon generators (draw mini icons for each type)
 function makeIcon(type, color) {
   const s = `<svg width="36" height="36" viewBox="0 0 36 36" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
@@ -1043,7 +1060,7 @@ function renderItem(item) {
   el.style.top = item.y + 'px';
   el.style.width = item.w * CELL + 'px';
   el.style.height = item.h * CELL + 'px';
-  el.style.zIndex = item.z || 1;
+  el.style.zIndex = resolveItemZ(item);
   el.classList.toggle('selected', item.id === selectedId);
   el.classList.toggle('grouped', isGroupSelected(item.id));
   const body = el.querySelector('.item-body');
@@ -1101,7 +1118,7 @@ function addItem(tmpl) {
     w: width,
     h: height,
     color: tmpl.color || catalogEntry?.color || COLORS[idCounter % COLORS.length],
-    z: tmpl.z || 1,
+    z: Number.isFinite(Number(tmpl.z)) ? Number(tmpl.z) : (isBackgroundArtifact(tmpl.type || tmpl.id || catalogEntry?.id) ? 0 : 1),
   };
   constrainItemToGrid(item);
   items.push(item);

@@ -250,6 +250,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 // ── Constants ──
 const BASE_CELL = 20; // px per grid cell = 1 ft at 100% zoom
 let CELL = BASE_CELL;
+const FOOT_PRECISION = 10;
 const SCALE_LABEL = '1 cell = 1 ft';
 const DEFAULT_GRID_WIDTH = 60;
 const DEFAULT_GRID_HEIGHT = 40;
@@ -561,7 +562,7 @@ function buildPalette() {
       const div = document.createElement('div');
       div.className = 'artifact-item';
       div.draggable = true;
-      div.innerHTML = `<div class="artifact-icon">${makeIcon(e.icon, e.color)}</div><div class="artifact-name">${e.name}</div><div class="artifact-dims">${e.w}×${e.h} ft</div>`;
+      div.innerHTML = `<div class="artifact-icon">${makeIcon(e.icon, e.color)}</div><div class="artifact-name">${e.name}</div><div class="artifact-dims">${formatFeet(e.w)}×${formatFeet(e.h)} ft</div>`;
       div.addEventListener('dragstart', ev => {
         ev.dataTransfer.setData('artifact', JSON.stringify(e));
       });
@@ -586,9 +587,17 @@ function updateZoomInput() {
   document.getElementById('zoomInput').value = zoomPercent;
 }
 
+function roundToFootPrecision(value) {
+  return Math.round((Number(value) || 0) * FOOT_PRECISION) / FOOT_PRECISION;
+}
+
+function formatFeet(value) {
+  return roundToFootPrecision(value).toFixed(1);
+}
+
 function constrainItemToGrid(item) {
-  item.w = Math.min(gridWidth, Math.max(1, Math.round(Number(item.w) || 1)));
-  item.h = Math.min(gridHeight, Math.max(1, Math.round(Number(item.h) || 1)));
+  item.w = Math.min(gridWidth, Math.max(0.1, roundToFootPrecision(Number(item.w) || 0.1)));
+  item.h = Math.min(gridHeight, Math.max(0.1, roundToFootPrecision(Number(item.h) || 0.1)));
   const maxX = Math.max(0, gridWidth * CELL - item.w * CELL);
   const maxY = Math.max(0, gridHeight * CELL - item.h * CELL);
   item.x = Math.min(maxX, Math.max(0, snap(item.x)));
@@ -723,7 +732,7 @@ function floorplanItemsForPrompt() {
   return items
     .slice()
     .sort((a, b) => (a.y - b.y) || (a.x - b.x))
-    .map(item => `- ${item.name} [${item.type}] positioned at x=${Math.round(item.x / CELL)} ft, y=${Math.round(item.y / CELL)} ft; footprint=${item.w} ft x ${item.h} ft; color=${item.color || 'default'}`)
+    .map(item => `- ${item.name} [${item.type}] positioned at x=${formatFeet(item.x / CELL)} ft, y=${formatFeet(item.y / CELL)} ft; footprint=${formatFeet(item.w)} ft x ${formatFeet(item.h)} ft; color=${item.color || 'default'}`)
     .join('\n');
 }
 
@@ -747,8 +756,8 @@ function buildViewRenderPrompt(view = PRIMARY_RENDER_VIEW) {
   const userPrompt = document.getElementById('promptInput').value.trim();
   const floorplanSummary = floorplanItemsForPrompt();
   const occupiedBounds = getOccupiedFloorplanBounds();
-  const occupiedWidth = occupiedBounds ? Math.round(occupiedBounds.right - occupiedBounds.left) : gridWidth;
-  const occupiedDepth = occupiedBounds ? Math.round(occupiedBounds.bottom - occupiedBounds.top) : gridHeight;
+  const occupiedWidth = occupiedBounds ? roundToFootPrecision(occupiedBounds.right - occupiedBounds.left) : gridWidth;
+  const occupiedDepth = occupiedBounds ? roundToFootPrecision(occupiedBounds.bottom - occupiedBounds.top) : gridHeight;
   return `Create a single photorealistic architectural render of this floor plan, ${view.camera}. Show the entire layout in one image as a realistic renovation concept visualization, not a 2D blueprint.
 
 Requirements:
@@ -763,12 +772,12 @@ Requirements:
 - Keep the camera wide enough to see the full plan in one frame.
 - Do not add people, labels, dimensions, or watermark text.
 
-Occupied floor plan footprint from placed artifacts only: ${occupiedWidth} ft wide x ${occupiedDepth} ft deep.
+Occupied floor plan footprint from placed artifacts only: ${formatFeet(occupiedWidth)} ft wide x ${formatFeet(occupiedDepth)} ft deep.
 Artifact footprint bounds:
-- left edge: ${occupiedBounds ? occupiedBounds.left : 0} ft
-- right edge: ${occupiedBounds ? occupiedBounds.right : gridWidth} ft
-- top edge: ${occupiedBounds ? occupiedBounds.top : 0} ft
-- bottom edge: ${occupiedBounds ? occupiedBounds.bottom : gridHeight} ft
+- left edge: ${formatFeet(occupiedBounds ? occupiedBounds.left : 0)} ft
+- right edge: ${formatFeet(occupiedBounds ? occupiedBounds.right : gridWidth)} ft
+- top edge: ${formatFeet(occupiedBounds ? occupiedBounds.top : 0)} ft
+- bottom edge: ${formatFeet(occupiedBounds ? occupiedBounds.bottom : gridHeight)} ft
 Original user brief entered in FloorCraft:
 ${userPrompt || 'No extra style notes were provided, so use a polished contemporary residential finish palette.'}
 
@@ -927,7 +936,10 @@ function drawRulers() {
 // ── Item rendering ──
 const COLORS = ['#4a5060','#3a5048','#5a4a38','#4a4858','#3a4848','#5a5038','#4a3848','#3a4838'];
 
-function snap(v) { return Math.round(v / CELL) * CELL; }
+function snap(v) {
+  const step = CELL / FOOT_PRECISION;
+  return Math.round(v / step) * step;
+}
 
 function getCanvasPoint(ev) {
   const rect = canvas.getBoundingClientRect();
@@ -1103,7 +1115,7 @@ function renderItem(item) {
   const name = el.querySelector('.item-name');
   const dims = el.querySelector('.item-dims');
   name.textContent = item.name;
-  dims.textContent = `${item.w} × ${item.h} ft`;
+  dims.textContent = `${formatFeet(item.w)} × ${formatFeet(item.h)} ft`;
   return el;
 }
 
@@ -1136,8 +1148,8 @@ canvasWrap.addEventListener('wheel', ev => {
 
 function addItem(tmpl) {
   const catalogEntry = getCatalogEntry(tmpl.type, tmpl.id, tmpl.name, tmpl.icon);
-  const width = Math.max(1, Math.round(Number(tmpl.w) || 1));
-  const height = Math.max(1, Math.round(Number(tmpl.h) || 1));
+  const width = Math.max(0.1, roundToFootPrecision(Number(tmpl.w) || 0.1));
+  const height = Math.max(0.1, roundToFootPrecision(Number(tmpl.h) || 0.1));
   const x = Number.isFinite(Number(tmpl.x)) ? snap(Number(tmpl.x)) : snap(40);
   const y = Number.isFinite(Number(tmpl.y)) ? snap(Number(tmpl.y)) : snap(40);
   const item = {
@@ -1221,8 +1233,8 @@ function onResizeMove(ev) {
   const item = items.find(i => i.id === resizeState.id);
   const dw = ev.clientX - resizeState.startX;
   const dh = ev.clientY - resizeState.startY;
-  item.w = Math.max(1, Math.round((resizeState.startW * CELL + dw) / CELL));
-  item.h = Math.max(1, Math.round((resizeState.startH * CELL + dh) / CELL));
+  item.w = Math.max(0.1, roundToFootPrecision((resizeState.startW * CELL + dw) / CELL));
+  item.h = Math.max(0.1, roundToFootPrecision((resizeState.startH * CELL + dh) / CELL));
   item.w = Math.min(item.w, gridWidth);
   item.h = Math.min(item.h, gridHeight);
   constrainItemToGrid(item);
@@ -1390,8 +1402,8 @@ function buildFloorplanSnapshot() {
       type: item.type,
       icon: item.icon,
       desc: item.desc,
-      x: Math.round(item.x / CELL),
-      y: Math.round(item.y / CELL),
+      x: roundToFootPrecision(item.x / CELL),
+      y: roundToFootPrecision(item.y / CELL),
       w: item.w,
       h: item.h,
       color: item.color,
@@ -1522,7 +1534,7 @@ function createFloorplanSnapshotCanvas() {
     ctx.textAlign = 'center';
     ctx.fillText(item.name, x + iw / 2, y + Math.max(14, ih / 2 - 2));
     ctx.fillStyle = '#2e271d';
-    ctx.fillText(`${item.w}x${item.h} ft`, x + iw / 2, y + Math.max(26, ih / 2 + 10));
+    ctx.fillText(`${formatFeet(item.w)}x${formatFeet(item.h)} ft`, x + iw / 2, y + Math.max(26, ih / 2 + 10));
   });
 
   return snapshot;
@@ -1553,26 +1565,26 @@ function updateInspector(item) {
     <div class="field-row dims-row">
       <div>
         <div class="field-label">Width (ft)</div>
-        <input class="field-input" type="number" min="1" value="${item.w}" oninput="updateField(${item.id},'w',+this.value)"/>
+        <input class="field-input" type="number" min="0.1" step="0.1" value="${formatFeet(item.w)}" oninput="updateField(${item.id},'w',+this.value)"/>
       </div>
       <div>
         <div class="field-label">Depth (ft)</div>
-        <input class="field-input" type="number" min="1" value="${item.h}" oninput="updateField(${item.id},'h',+this.value)"/>
+        <input class="field-input" type="number" min="0.1" step="0.1" value="${formatFeet(item.h)}" oninput="updateField(${item.id},'h',+this.value)"/>
       </div>
     </div>
     <div class="field-row dims-row">
       <div>
         <div class="field-label">X (ft)</div>
-        <input class="field-input" type="number" value="${Math.round(item.x/CELL)}" oninput="updateField(${item.id},'x',+this.value*${CELL})"/>
+        <input class="field-input" type="number" step="0.1" value="${formatFeet(item.x/CELL)}" oninput="updateField(${item.id},'x',+this.value*${CELL})"/>
       </div>
       <div>
         <div class="field-label">Y (ft)</div>
-        <input class="field-input" type="number" value="${Math.round(item.y/CELL)}" oninput="updateField(${item.id},'y',+this.value*${CELL})"/>
+        <input class="field-input" type="number" step="0.1" value="${formatFeet(item.y/CELL)}" oninput="updateField(${item.id},'y',+this.value*${CELL})"/>
       </div>
     </div>
     <div class="field-row">
       <div class="field-label">Area</div>
-      <div style="font-size:11px;color:var(--text2);padding:4px 0">${item.w * item.h} sq ft</div>
+      <div style="font-size:11px;color:var(--text2);padding:4px 0">${formatFeet(item.w * item.h)} sq ft</div>
     </div>
     <div class="field-row">
       <div class="field-label">Color</div>
@@ -1590,8 +1602,8 @@ function updateField(id, field, value) {
   if (!item) return;
   item[field] = value;
   if (field === 'w' || field === 'h') {
-    item.w = Math.min(gridWidth, Math.max(1, Math.round(Number(item.w) || 1)));
-    item.h = Math.min(gridHeight, Math.max(1, Math.round(Number(item.h) || 1)));
+    item.w = Math.min(gridWidth, Math.max(0.1, roundToFootPrecision(Number(item.w) || 0.1)));
+    item.h = Math.min(gridHeight, Math.max(0.1, roundToFootPrecision(Number(item.h) || 0.1)));
   }
   if (field === 'x' || field === 'y' || field === 'w' || field === 'h') {
     constrainItemToGrid(item);

@@ -96,6 +96,11 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .render-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(247,239,226,.98), rgba(255,250,241,.92)); }
 .render-panel-title { font-family: var(--font-display); font-size: 18px; color: var(--accent); }
 .render-panel-note { padding: 10px 16px 0; font-size: 11px; color: var(--text3); }
+.render-prompt-wrap { padding: 14px 16px 0; display: flex; flex-direction: column; gap: 8px; }
+.render-prompt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.render-prompt-label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); }
+.render-prompt-input { width: 100%; min-height: 120px; resize: vertical; background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius); color: var(--text); font-family: var(--font-mono); font-size: 11px; line-height: 1.6; padding: 10px 12px; outline: none; }
+.render-prompt-input:focus { border-color: var(--accent); }
 .render-grid { padding: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; overflow: auto; }
 .render-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; min-height: 240px; display: flex; flex-direction: column; }
 .render-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
@@ -218,6 +223,13 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
       <button class="btn secondary" onclick="closeRenderPanel()">Close</button>
     </div>
     <div class="render-panel-note">A single AI-generated architectural render based on the current FloorCraft grid, using the actual floorplan layout as a reference image.</div>
+    <div class="render-prompt-wrap">
+      <div class="render-prompt-head">
+        <div class="render-prompt-label">Image Prompt Used</div>
+        <button class="btn secondary" onclick="regenerateRenderedView()">Regenerate View</button>
+      </div>
+      <textarea class="render-prompt-input" id="renderPromptInput" placeholder="The exact prompt used for rendering will appear here. You can edit it, then click Regenerate View."></textarea>
+    </div>
     <div class="render-grid" id="renderGrid"></div>
   </div>
 </main>
@@ -586,6 +598,20 @@ function setRenderButtonState() {
   btn.textContent = renderingViews ? 'Rendering View…' : 'Render View';
 }
 
+function getRenderPromptInput() {
+  return document.getElementById('renderPromptInput');
+}
+
+function setRenderPromptValue(prompt) {
+  const input = getRenderPromptInput();
+  if (input) input.value = prompt || '';
+}
+
+function getRenderPromptValue() {
+  const input = getRenderPromptInput();
+  return input ? input.value.trim() : '';
+}
+
 function setRenderedViewState(id, state) {
   renderedViews[id] = { ...(renderedViews[id] || {}), ...state };
   const body = document.getElementById(`render-body-${id}`);
@@ -624,6 +650,9 @@ Requirements:
 - Use the attached floor plan reference image as the primary layout source of truth.
 - Preserve the exact room adjacencies, artifact placement, artifact orientation, doors, windows, and overall proportions from the plan.
 - Respect the exact artifact positions on the grid when composing the layout. Do not swap rooms, move furniture, or invent additional fixtures.
+- Include ONLY the items that appear on the FloorCraft grid and in the artifact list below.
+- Do NOT add extra furniture, decor, appliances, fixtures, doors, windows, cabinetry, lighting, wall art, plants, rugs, accessories, or architectural elements that are not already present on the grid.
+- If an object is not shown on the grid, it must not appear in the rendered image.
 - Use a top-down isometric dollhouse or cutaway architectural view so the whole plan stays visible and directly correlated to the source grid.
 - Make it feel photo realistic with natural materials, accurate lighting, realistic shadows, and believable scale.
 - Keep the camera wide enough to see the full plan in one frame.
@@ -641,7 +670,7 @@ function extractGeneratedImage(responseData) {
   return responseData?.imageBase64 || responseData?.data?.[0]?.b64_json || null;
 }
 
-async function generateRenderedView(view) {
+async function generateRenderedView(view, promptText) {
   setRenderedViewState(view.id, {
     label: view.label,
     status: 'loading',
@@ -655,7 +684,7 @@ async function generateRenderedView(view) {
     },
     body: JSON.stringify({
       viewId: view.id,
-      prompt: buildViewRenderPrompt(view),
+      prompt: promptText,
       referenceImageDataUrl: createRenderReferenceImageDataUrl()
     })
   });
@@ -677,7 +706,7 @@ async function generateRenderedView(view) {
   });
 }
 
-async function renderView() {
+async function renderView(useEditedPrompt = false) {
   if (!items.length) {
     alert('Add or generate a floorplan first, then render the view.');
     return;
@@ -691,6 +720,10 @@ async function renderView() {
   openRenderPanel();
   renderingViews = true;
   setRenderButtonState();
+  const promptText = useEditedPrompt
+    ? (getRenderPromptValue() || buildViewRenderPrompt(PRIMARY_RENDER_VIEW))
+    : buildViewRenderPrompt(PRIMARY_RENDER_VIEW);
+  setRenderPromptValue(promptText);
 
   setRenderedViewState(PRIMARY_RENDER_VIEW.id, {
     label: PRIMARY_RENDER_VIEW.label,
@@ -700,7 +733,7 @@ async function renderView() {
   });
 
   try {
-    await generateRenderedView(PRIMARY_RENDER_VIEW);
+    await generateRenderedView(PRIMARY_RENDER_VIEW, promptText);
   } catch (err) {
     setRenderedViewState(PRIMARY_RENDER_VIEW.id, {
       label: PRIMARY_RENDER_VIEW.label,
@@ -712,6 +745,10 @@ async function renderView() {
     renderingViews = false;
     setRenderButtonState();
   }
+}
+
+function regenerateRenderedView() {
+  renderView(true);
 }
 
 function downloadRenderedView(id) {

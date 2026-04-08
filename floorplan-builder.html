@@ -641,9 +641,28 @@ function floorplanItemsForPrompt() {
     .join('\n');
 }
 
+function getOccupiedFloorplanBounds() {
+  if (!items.length) return null;
+  return items.reduce((acc, item) => {
+    const left = item.x / CELL;
+    const top = item.y / CELL;
+    const right = left + item.w;
+    const bottom = top + item.h;
+    return {
+      left: Math.min(acc.left, left),
+      top: Math.min(acc.top, top),
+      right: Math.max(acc.right, right),
+      bottom: Math.max(acc.bottom, bottom)
+    };
+  }, { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
+}
+
 function buildViewRenderPrompt(view = PRIMARY_RENDER_VIEW) {
   const userPrompt = document.getElementById('promptInput').value.trim();
   const floorplanSummary = floorplanItemsForPrompt();
+  const occupiedBounds = getOccupiedFloorplanBounds();
+  const occupiedWidth = occupiedBounds ? Math.round(occupiedBounds.right - occupiedBounds.left) : gridWidth;
+  const occupiedDepth = occupiedBounds ? Math.round(occupiedBounds.bottom - occupiedBounds.top) : gridHeight;
   return `Create a single photorealistic architectural render of this floor plan, ${view.camera}. Show the entire layout in one image as a realistic renovation concept visualization, not a 2D blueprint.
 
 Requirements:
@@ -658,7 +677,12 @@ Requirements:
 - Keep the camera wide enough to see the full plan in one frame.
 - Do not add people, labels, dimensions, or watermark text.
 
-Floor plan size: ${gridWidth} ft wide x ${gridHeight} ft deep.
+Occupied floor plan footprint from placed artifacts only: ${occupiedWidth} ft wide x ${occupiedDepth} ft deep.
+Artifact footprint bounds:
+- left edge: ${occupiedBounds ? occupiedBounds.left : 0} ft
+- right edge: ${occupiedBounds ? occupiedBounds.right : gridWidth} ft
+- top edge: ${occupiedBounds ? occupiedBounds.top : 0} ft
+- bottom edge: ${occupiedBounds ? occupiedBounds.bottom : gridHeight} ft
 Original user brief entered in FloorCraft:
 ${userPrompt || 'No extra style notes were provided, so use a polished contemporary residential finish palette.'}
 

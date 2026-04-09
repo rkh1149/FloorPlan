@@ -445,9 +445,24 @@ const BACKGROUND_ARTIFACT_TYPES = new Set([
   'room', 'closet', 'loft', 'hallway', 'foyer', 'pantry', 'mudroom',
   'office', 'garage', 'balcony', 'patio', 'utility-room'
 ]);
+const HORIZONTAL_WALL_TYPES = new Set(['wall-h', 'ext-wall-h']);
+const VERTICAL_WALL_TYPES = new Set(['wall-v', 'ext-wall-v']);
+const WALL_SNAP_THRESHOLD_FEET = 0.6;
+const ROOM_DETECTION_TOLERANCE_FEET = 0.25;
 
 function isBackgroundArtifact(type) {
   return BACKGROUND_ARTIFACT_TYPES.has(String(type || '').trim());
+}
+
+function isWallArtifact(type) {
+  return HORIZONTAL_WALL_TYPES.has(String(type || '').trim()) || VERTICAL_WALL_TYPES.has(String(type || '').trim());
+}
+
+function getWallOrientation(itemOrType) {
+  const type = typeof itemOrType === 'string' ? itemOrType : itemOrType?.type;
+  if (HORIZONTAL_WALL_TYPES.has(String(type || '').trim())) return 'horizontal';
+  if (VERTICAL_WALL_TYPES.has(String(type || '').trim())) return 'vertical';
+  return null;
 }
 
 function resolveItemZ(item) {
@@ -636,6 +651,85 @@ function roundToFootPrecision(value) {
 
 function formatFeet(value) {
   return roundToFootPrecision(value).toFixed(1);
+}
+
+function roughlyEqualFeet(a, b, tolerance = ROOM_DETECTION_TOLERANCE_FEET) {
+  return Math.abs((Number(a) || 0) - (Number(b) || 0)) <= tolerance;
+}
+
+function snapValueToCandidates(value, candidates, thresholdPx) {
+  let best = value;
+  let bestDistance = thresholdPx + 1;
+  candidates.forEach(candidate => {
+    const distance = Math.abs(candidate - value);
+    if (distance <= thresholdPx && distance < bestDistance) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  });
+  return best;
+}
+
+function applyWallSnap(item) {
+  if (!isWallArtifact(item?.type)) return;
+
+  const thresholdPx = WALL_SNAP_THRESHOLD_FEET * CELL;
+  const otherWalls = items.filter(entry => entry.id !== item.id && isWallArtifact(entry.type));
+  const orientation = getWallOrientation(item);
+
+  if (orientation === 'horizontal') {
+    const leftCandidates = [];
+    const rightCandidates = [];
+    const topCandidates = [];
+
+    otherWalls.forEach(other => {
+      const otherOrientation = getWallOrientation(other);
+      leftCandidates.push(other.x, other.x + other.w * CELL);
+      rightCandidates.push(other.x, other.x + other.w * CELL);
+      if (otherOrientation === 'horizontal') {
+        topCandidates.push(other.y);
+      } else {
+        topCandidates.push(other.y, other.y + other.h * CELL - item.h * CELL);
+      }
+    });
+
+    const snappedLeft = snapValueToCandidates(item.x, leftCandidates, thresholdPx);
+    const snappedRight = snapValueToCandidates(item.x + item.w * CELL, rightCandidates, thresholdPx);
+    const leftDistance = Math.abs(snappedLeft - item.x);
+    const rightDistance = Math.abs(snappedRight - (item.x + item.w * CELL));
+    if (leftDistance <= thresholdPx || rightDistance <= thresholdPx) {
+      item.x = leftDistance <= rightDistance ? snappedLeft : snappedRight - item.w * CELL;
+    }
+    item.y = snapValueToCandidates(item.y, topCandidates, thresholdPx);
+  }
+
+  if (orientation === 'vertical') {
+    const topCandidates = [];
+    const bottomCandidates = [];
+    const leftCandidates = [];
+
+    otherWalls.forEach(other => {
+      const otherOrientation = getWallOrientation(other);
+      topCandidates.push(other.y, other.y + other.h * CELL);
+      bottomCandidates.push(other.y, other.y + other.h * CELL);
+      if (otherOrientation === 'vertical') {
+        leftCandidates.push(other.x);
+      } else {
+        leftCandidates.push(other.x, other.x + other.w * CELL - item.w * CELL);
+      }
+    });
+
+    const snappedTop = snapValueToCandidates(item.y, topCandidates, thresholdPx);
+    const snappedBottom = snapValueToCandidates(item.y + item.h * CELL, bottomCandidates, thresholdPx);
+    const topDistance = Math.abs(snappedTop - item.y);
+    const bottomDistance = Math.abs(snappedBottom - (item.y + item.h * CELL));
+    if (topDistance <= thresholdPx || bottomDistance <= thresholdPx) {
+      item.y = topDistance <= bottomDistance ? snappedTop : snappedBottom - item.h * CELL;
+    }
+    item.x = snapValueToCandidates(item.x, leftCandidates, thresholdPx);
+  }
+
+  constrainItemToGrid(item);
 }
 
 function constrainItemToGrid(item) {
@@ -1059,6 +1153,88 @@ function getRoomSelectionIds(roomId) {
     .map(item => item.id);
 }
 
+function detectInferredWallRooms() {
+  const horizontals = items.filter(item => getWallOrientation(item) === 'horizontal');
+  const verticals = items.filter(item => getWallOrientation(item) === 'vertical');
+  const rooms = [];
+  const seen = new Set();
+
+  horizontals.forEach(top => {
+    horizontals.forEach(bottom => {
+      if (top.id === bottom.id) return;
+      if (!roughlyEqualFeet(top.x / CELL, bottom.x / CELL) || !roughlyEqualFeet(top.w, bottom.w)) return;
+      if ((bottom.y / CELL) <= (top.y / CELL)) return;
+
+      verticals.forEach(left => {
+        verticals.forEach(right => {
+          if (left.id === right.id) return;
+          if (!roughlyEqualFeet(left.y / CELL, right.y / CELL) || !roughlyEqualFeet(left.h, right.h)) return;
+          if ((right.x / CELL) <= (left.x / CELL)) return;
+
+          const topLeft = top.x / CELL;
+          const topRight = topLeft + top.w;
+          const topY = top.y / CELL;
+          const bottomBottom = (bottom.y + bottom.h * CELL) / CELL;
+          const leftX = left.x / CELL;
+          const rightRight = (right.x + right.w * CELL) / CELL;
+          const leftTop = left.y / CELL;
+          const leftBottom = leftTop + left.h;
+
+          if (
+            !roughlyEqualFeet(leftX, topLeft) ||
+            !roughlyEqualFeet(rightRight, topRight) ||
+            !roughlyEqualFeet(leftTop, topY) ||
+            !roughlyEqualFeet(leftBottom, bottomBottom)
+          ) {
+            return;
+          }
+
+          const key = [top.id, bottom.id, left.id, right.id].sort((a, b) => a - b).join(':');
+          if (seen.has(key)) return;
+          seen.add(key);
+
+          const outerRect = {
+            left: left.x,
+            top: top.y,
+            right: right.x + right.w * CELL,
+            bottom: bottom.y + bottom.h * CELL
+          };
+          const innerRect = {
+            left: left.x + left.w * CELL,
+            top: top.y + top.h * CELL,
+            right: right.x,
+            bottom: bottom.y
+          };
+          if (innerRect.right <= innerRect.left || innerRect.bottom <= innerRect.top) return;
+
+          const selectionIds = items
+            .filter(item => {
+              if ([top.id, bottom.id, left.id, right.id].includes(item.id)) return true;
+              return isRectContained(getItemRect(item), innerRect);
+            })
+            .map(item => item.id);
+
+          rooms.push({
+            wallIds: [top.id, bottom.id, left.id, right.id],
+            selectionIds,
+            outerRect,
+            innerRect,
+            area: (innerRect.right - innerRect.left) * (innerRect.bottom - innerRect.top)
+          });
+        });
+      });
+    });
+  });
+
+  return rooms;
+}
+
+function getInferredRoomByWallId(itemId) {
+  return detectInferredWallRooms()
+    .filter(room => room.wallIds.includes(itemId))
+    .sort((a, b) => a.area - b.area)[0] || null;
+}
+
 function selectionMatches(ids) {
   if (ids.length !== groupSelectionIds.length) return false;
   const current = new Set(groupSelectionIds);
@@ -1232,6 +1408,7 @@ function addItem(tmpl) {
     z: Number.isFinite(Number(tmpl.z)) ? Number(tmpl.z) : (isBackgroundArtifact(tmpl.type || tmpl.id || catalogEntry?.id) ? 0 : 1),
   };
   constrainItemToGrid(item);
+  applyWallSnap(item);
   items.push(item);
   renderItem(item);
   selectItem(item.id);
@@ -1255,6 +1432,19 @@ function onItemMouseDown(ev, id) {
   if (ev.target.classList.contains('resize-handle') || ev.target.classList.contains('delete-btn')) return;
   if (roomMoveMode) {
     const item = items.find(i => i.id === id);
+    if (item && isWallArtifact(item.type)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const inferredRoom = getInferredRoomByWallId(id);
+      if (inferredRoom) {
+        if (selectionMatches(inferredRoom.selectionIds)) {
+          onGroupDragStart(ev);
+        } else {
+          setGroupSelection(inferredRoom.selectionIds);
+        }
+        return;
+      }
+    }
     if (item && isBackgroundArtifact(item.type)) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -1287,6 +1477,7 @@ function onDragMove(ev) {
   item.x = snap(point.x - dragState.startX);
   item.y = snap(point.y - dragState.startY);
   constrainItemToGrid(item);
+  applyWallSnap(item);
   renderItem(item);
   updateInspector(item);
 }
@@ -1320,6 +1511,7 @@ function onResizeMove(ev) {
   item.w = Math.min(item.w, gridWidth);
   item.h = Math.min(item.h, gridHeight);
   constrainItemToGrid(item);
+  applyWallSnap(item);
   renderItem(item);
   updateInspector(item);
 }

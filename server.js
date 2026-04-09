@@ -33,25 +33,26 @@ const FLOORPLAN_RESPONSE_FORMAT = {
     type: 'object',
     additionalProperties: false,
     properties: {
-      items: {
-        type: 'array',
         items: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            type: { type: 'string', enum: FLOORPLAN_TYPE_IDS },
-            name: { type: 'string' },
-            desc: { type: 'string' },
-            x: { type: 'integer', minimum: 0, maximum: 300 },
-            y: { type: 'integer', minimum: 0, maximum: 300 },
-            w: { type: 'integer', minimum: 1, maximum: 300 },
-            h: { type: 'integer', minimum: 1, maximum: 300 },
-            color: { type: 'string' },
-            z: { type: 'integer', minimum: 1, maximum: 10 }
-          },
-          required: ['type', 'name', 'desc', 'x', 'y', 'w', 'h', 'color', 'z']
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              type: { type: 'string', enum: FLOORPLAN_TYPE_IDS },
+              name: { type: 'string' },
+              desc: { type: 'string' },
+              x: { type: 'integer', minimum: 0, maximum: 300 },
+              y: { type: 'integer', minimum: 0, maximum: 300 },
+              w: { type: 'integer', minimum: 1, maximum: 300 },
+              h: { type: 'integer', minimum: 1, maximum: 300 },
+              color: { type: 'string' },
+              roomGroup: { type: 'string' },
+              z: { type: 'integer', minimum: 1, maximum: 10 }
+            },
+            required: ['type', 'name', 'desc', 'x', 'y', 'w', 'h', 'color', 'z']
+          }
         }
-      }
     },
     required: ['items']
   }
@@ -129,11 +130,11 @@ function dataUrlToBlob(dataUrl) {
 }
 
 function floorplanSystemPrompt(gridWidth, gridHeight) {
-  return `You are an expert floor plan generator. The user describes a space and you output a JSON array of items to place on a grid-based floor plan.
+  return `You are an expert floor plan generator. The user describes a space and you output a JSON object with an "items" array to place on a grid-based floor plan.
 
 CATALOG of valid type IDs: ${FLOORPLAN_TYPE_IDS.join(', ')}
 
-Each item: { "type": "<id>", "name": "<label>", "desc": "<short description>", "x": <grid units>, "y": <grid units>, "w": <width in ft>, "h": <depth in ft>, "color": "<hex color>", "z": <z-index 1-10> }
+Each item: { "type": "<id>", "name": "<label>", "desc": "<short description>", "x": <grid units>, "y": <grid units>, "w": <width in ft>, "h": <depth in ft>, "color": "<hex color>", "roomGroup": "<shared room id when applicable>", "z": <z-index 1-10> }
 
 COLORS by type:
 - walls/ext-walls: #5a5650 or #3a3830
@@ -148,10 +149,13 @@ Rules:
 - Grid units = feet. Canvas is ~${gridWidth} ft wide x ${gridHeight} ft tall (origin top-left).
 - Place ext-walls FIRST around the perimeter. Use z:1 for walls, z:2 for furniture.
 - Rooms inside: use room-type items for room labels if needed, or just fill with furniture.
+- When a space is enclosed by generated walls and should move as one room, assign the same non-empty roomGroup string to every wall that defines that room and every artifact located inside that room.
+- Use distinct roomGroup values for different enclosed rooms, for example "room-1", "room-2", "ensuite-1", or "closet-1".
+- For items not belonging to a movable generated room group, omit roomGroup.
 - Leave realistic spacing: 3-4 ft clearance around beds, 2 ft around toilets.
 - Do not overlap item footprints. Every item must occupy its own clear position on the grid.
 - Snap all x/y to multiples of 1.
-- Return ONLY the JSON array, no extra text, no markdown.`;
+- Return ONLY the JSON object matching the schema, with no extra text and no markdown.`;
 }
 
 async function handleGenerateFloorplan(req, res) {

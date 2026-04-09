@@ -310,25 +310,26 @@ const FLOORPLAN_RESPONSE_FORMAT = {
     type: 'object',
     additionalProperties: false,
     properties: {
-      items: {
-        type: 'array',
         items: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            type: { type: 'string', enum: FLOORPLAN_TYPE_IDS },
-            name: { type: 'string' },
-            desc: { type: 'string' },
-            x: { type: 'integer', minimum: 0, maximum: 300 },
-            y: { type: 'integer', minimum: 0, maximum: 300 },
-            w: { type: 'integer', minimum: 1, maximum: 300 },
-            h: { type: 'integer', minimum: 1, maximum: 300 },
-            color: { type: 'string' },
-            z: { type: 'integer', minimum: 1, maximum: 10 }
-          },
-          required: ['type', 'name', 'desc', 'x', 'y', 'w', 'h', 'color', 'z']
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              type: { type: 'string', enum: FLOORPLAN_TYPE_IDS },
+              name: { type: 'string' },
+              desc: { type: 'string' },
+              x: { type: 'integer', minimum: 0, maximum: 300 },
+              y: { type: 'integer', minimum: 0, maximum: 300 },
+              w: { type: 'integer', minimum: 1, maximum: 300 },
+              h: { type: 'integer', minimum: 1, maximum: 300 },
+              color: { type: 'string' },
+              roomGroup: { type: 'string' },
+              z: { type: 'integer', minimum: 1, maximum: 10 }
+            },
+            required: ['type', 'name', 'desc', 'x', 'y', 'w', 'h', 'color', 'z']
+          }
         }
-      }
     },
     required: ['items']
   }
@@ -1168,6 +1169,14 @@ function getRoomSelectionIds(roomId) {
     .map(item => item.id);
 }
 
+function getExplicitRoomGroupSelectionIds(itemId) {
+  const item = items.find(entry => entry.id === itemId);
+  if (!item?.roomGroup) return [];
+  return items
+    .filter(entry => entry.roomGroup === item.roomGroup)
+    .map(entry => entry.id);
+}
+
 function detectInferredWallRooms() {
   const horizontals = items.filter(item => getWallOrientation(item) === 'horizontal');
   const verticals = items.filter(item => getWallOrientation(item) === 'vertical');
@@ -1415,6 +1424,7 @@ function addItem(tmpl) {
     type: tmpl.type || tmpl.id || catalogEntry?.id || 'artifact',
     icon: tmpl.icon || catalogEntry?.icon || tmpl.type || tmpl.id || 'room',
     desc: tmpl.desc || catalogEntry?.desc || '',
+    roomGroup: typeof tmpl.roomGroup === 'string' && tmpl.roomGroup.trim() ? tmpl.roomGroup.trim() : '',
     x,
     y,
     w: width,
@@ -1447,6 +1457,17 @@ function onItemMouseDown(ev, id) {
   if (ev.target.classList.contains('resize-handle') || ev.target.classList.contains('delete-btn')) return;
   if (roomMoveMode) {
     const item = items.find(i => i.id === id);
+    const explicitRoomSelectionIds = getExplicitRoomGroupSelectionIds(id);
+    if (explicitRoomSelectionIds.length > 1) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (selectionMatches(explicitRoomSelectionIds)) {
+        onGroupDragStart(ev);
+      } else {
+        setGroupSelection(explicitRoomSelectionIds);
+      }
+      return;
+    }
     if (item && isWallArtifact(item.type)) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -1702,6 +1723,7 @@ function buildFloorplanSnapshot() {
       type: item.type,
       icon: item.icon,
       desc: item.desc,
+      roomGroup: item.roomGroup || undefined,
       x: roundToFootPrecision(item.x / CELL),
       y: roundToFootPrecision(item.y / CELL),
       w: item.w,

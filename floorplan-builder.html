@@ -454,10 +454,10 @@ function resolveItemZ(item) {
   const numericZ = Number.isFinite(Number(item?.z)) ? Number(item.z) : null;
   if (isBackgroundArtifact(item?.type)) {
     const area = Math.max(1, Math.round((Number(item?.w) || 1) * (Number(item?.h) || 1)));
-    const layeredZ = Math.max(1, 1000 - area);
+    const layeredZ = Math.max(1, Math.min(89, 90 - area));
     return numericZ === null ? layeredZ : Math.max(1, Math.min(layeredZ, numericZ));
   }
-  return numericZ === null ? 1 : Math.max(1, numericZ);
+  return numericZ === null ? 100 : Math.max(100, numericZ);
 }
 
 // SVG icon generators (draw mini icons for each type)

@@ -61,6 +61,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .artifact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .artifact-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 6px; cursor: grab; display: flex; flex-direction: column; align-items: center; gap: 5px; transition: border-color .15s, transform .1s; user-select: none; }
 .artifact-item:hover { border-color: var(--accent); transform: translateY(-1px); }
+.artifact-item.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(184, 134, 66, .18); transform: translateY(-1px); }
 .artifact-item:active { cursor: grabbing; }
 .artifact-icon { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(239,230,214,.88)); border: 1px solid rgba(199,186,164,.9); box-shadow: 0 8px 16px rgba(122, 102, 74, .12); }
 .artifact-icon svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 3px rgba(70, 55, 35, .18)); }
@@ -71,12 +72,12 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .canvas-wrap { position: relative; overflow: auto; background: var(--bg); }
 #canvas { position: relative; min-width: 100%; min-height: 100%; overflow: hidden; cursor: default; }
 .grid-bg { position: absolute; inset: 0; pointer-events: none; }
-.floor-item { position: absolute; cursor: move; user-select: none; overflow: visible; }
+.floor-item { position: absolute; cursor: move; user-select: none; overflow: visible; touch-action: none; }
 .floor-item .item-body { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 9px; color: var(--text2); text-align: center; line-height: 1.2; transition: transform .15s; position: relative; overflow: visible; padding: 2px; }
 .floor-item .item-icon { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,.38), rgba(255,255,255,0) 45%), linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0)); box-shadow: 0 10px 18px rgba(90, 72, 50, .12); }
 .floor-item .item-icon svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 3px rgba(61, 46, 29, .18)); }
 .floor-item.selected .item-icon { box-shadow: 0 0 0 2px var(--accent), 0 12px 22px rgba(90, 72, 50, .18); }
-.floor-item .resize-handle { position: absolute; bottom: 1px; right: 1px; width: 10px; height: 10px; cursor: se-resize; opacity: 0; transition: opacity .15s; }
+.floor-item .resize-handle { position: absolute; bottom: 1px; right: 1px; width: 10px; height: 10px; cursor: se-resize; opacity: 0; transition: opacity .15s; touch-action: none; }
 .floor-item:hover .resize-handle, .floor-item.selected .resize-handle { opacity: 1; }
 .resize-handle::after { content: ''; display: block; width: 6px; height: 6px; border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent); margin: 2px 0 0 2px; }
 .floor-item .item-meta { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); min-width: max-content; max-width: 160px; text-align: center; pointer-events: none; }
@@ -89,7 +90,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #canvas.room-move-active .resize-handle,
 #canvas.room-move-active .delete-btn { opacity: 0 !important; pointer-events: none; }
 .room-selection-box { position: absolute; border: 1px dashed var(--accent3); background: rgba(122, 158, 181, .12); pointer-events: none; z-index: 60; display: none; }
-.room-group-outline { position: absolute; border: 2px dashed var(--accent); background: rgba(200, 169, 110, .08); pointer-events: auto; cursor: grab; z-index: 55; display: none; }
+.room-group-outline { position: absolute; border: 2px dashed var(--accent); background: rgba(200, 169, 110, .08); pointer-events: auto; cursor: grab; z-index: 55; display: none; touch-action: none; }
 .room-group-outline::after { content: attr(data-label); position: absolute; top: -24px; left: 0; background: var(--surface); border: 1px solid var(--border2); border-radius: 999px; color: var(--accent); font-size: 10px; line-height: 1; padding: 5px 8px; white-space: nowrap; }
 .render-panel { position: absolute; inset: 18px 18px 18px 42px; background: rgba(255, 250, 241, .96); border: 1px solid var(--border2); border-radius: 12px; z-index: 250; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(12px); }
 .render-panel.visible { display: flex; }
@@ -570,8 +571,21 @@ let zoomPercent = DEFAULT_ZOOM;
 let renderedViews = {};
 let renderingViews = false;
 let serverApiConfigured = false;
+let selectedPaletteArtifactId = null;
 
 // ── Build palette ──
+function setSelectedPaletteArtifact(artifactId = null) {
+  selectedPaletteArtifactId = artifactId;
+  document.querySelectorAll('.artifact-item').forEach(entry => {
+    entry.classList.toggle('active', artifactId !== null && entry.dataset.artifactId === artifactId);
+  });
+}
+
+function getSelectedPaletteArtifact() {
+  if (!selectedPaletteArtifactId) return null;
+  return Object.values(CATALOG).flat().find(entry => entry.id === selectedPaletteArtifactId) || null;
+}
+
 function buildPalette() {
   const pal = document.getElementById('palette');
   for (const [cat, entries] of Object.entries(CATALOG)) {
@@ -584,10 +598,16 @@ function buildPalette() {
     entries.forEach(e => {
       const div = document.createElement('div');
       div.className = 'artifact-item';
+      div.dataset.artifactId = e.id;
       div.draggable = true;
       div.innerHTML = `<div class="artifact-icon">${makeIcon(e.icon, e.color)}</div><div class="artifact-name">${e.name}</div><div class="artifact-dims">${formatFeet(e.w)}×${formatFeet(e.h)} ft</div>`;
       div.addEventListener('dragstart', ev => {
+        setSelectedPaletteArtifact(null);
         ev.dataTransfer.setData('artifact', JSON.stringify(e));
+      });
+      div.addEventListener('click', ev => {
+        ev.preventDefault();
+        setSelectedPaletteArtifact(selectedPaletteArtifactId === e.id ? null : e.id);
       });
       div.title = e.desc;
       grid.appendChild(div);
@@ -1142,8 +1162,8 @@ function renderItem(item) {
     el.id = 'item-' + item.id;
     el.innerHTML = `<div class="item-body"><div class="item-icon"></div><div class="item-meta"><div class="item-name"></div><div class="item-dims"></div></div></div><div class="resize-handle"></div><div class="delete-btn">×</div>`;
     document.getElementById('canvas').appendChild(el);
-    el.addEventListener('mousedown', ev => onItemMouseDown(ev, item.id));
-    el.querySelector('.resize-handle').addEventListener('mousedown', ev => onResizeMouseDown(ev, item.id));
+    el.addEventListener('pointerdown', ev => onItemMouseDown(ev, item.id));
+    el.querySelector('.resize-handle').addEventListener('pointerdown', ev => onResizeMouseDown(ev, item.id));
     el.querySelector('.delete-btn').addEventListener('click', ev => { ev.stopPropagation(); deleteItem(item.id); });
     el.addEventListener('click', ev => { ev.stopPropagation(); selectItem(item.id); });
   }
@@ -1184,8 +1204,8 @@ canvas.addEventListener('drop', ev => {
   const y = snap(ev.clientY - rect.top - (tmpl.h * CELL) / 2);
   addItem({ ...tmpl, x, y });
 });
-canvas.addEventListener('mousedown', onCanvasMouseDown);
-roomGroupOutline.addEventListener('mousedown', onGroupDragStart);
+canvas.addEventListener('pointerdown', onCanvasMouseDown);
+roomGroupOutline.addEventListener('pointerdown', onGroupDragStart);
 canvasWrap.addEventListener('wheel', ev => {
   if (!(ev.ctrlKey || ev.metaKey)) return;
   ev.preventDefault();
@@ -1218,8 +1238,20 @@ function addItem(tmpl) {
   return item;
 }
 
+function placeSelectedPaletteArtifactAtEvent(ev) {
+  const template = getSelectedPaletteArtifact();
+  if (!template) return false;
+  const rect = canvas.getBoundingClientRect();
+  const x = snap(ev.clientX - rect.left - (template.w * CELL) / 2);
+  const y = snap(ev.clientY - rect.top - (template.h * CELL) / 2);
+  addItem({ ...template, x, y });
+  setSelectedPaletteArtifact(null);
+  return true;
+}
+
 // ── Drag items ──
 function onItemMouseDown(ev, id) {
+  ev.preventDefault();
   if (ev.target.classList.contains('resize-handle') || ev.target.classList.contains('delete-btn')) return;
   if (roomMoveMode) {
     const item = items.find(i => i.id === id);
@@ -1244,8 +1276,9 @@ function onItemMouseDown(ev, id) {
   const startX = point.x - item.x;
   const startY = point.y - item.y;
   dragState = { id, startX, startY };
-  document.addEventListener('mousemove', onDragMove);
-  document.addEventListener('mouseup', onDragEnd);
+  document.addEventListener('pointermove', onDragMove);
+  document.addEventListener('pointerup', onDragEnd);
+  document.addEventListener('pointercancel', onDragEnd);
 }
 function onDragMove(ev) {
   if (!dragState) return;
@@ -1259,20 +1292,23 @@ function onDragMove(ev) {
 }
 function onDragEnd() {
   dragState = null;
-  document.removeEventListener('mousemove', onDragMove);
-  document.removeEventListener('mouseup', onDragEnd);
+  document.removeEventListener('pointermove', onDragMove);
+  document.removeEventListener('pointerup', onDragEnd);
+  document.removeEventListener('pointercancel', onDragEnd);
 }
 
 // ── Resize ──
 function onResizeMouseDown(ev, id) {
+  ev.preventDefault();
   if (roomMoveMode) return;
   ev.stopPropagation();
   const item = items.find(i => i.id === id);
   const startX = ev.clientX, startY = ev.clientY;
   const startW = item.w, startH = item.h;
   resizeState = { id, startX, startY, startW, startH };
-  document.addEventListener('mousemove', onResizeMove);
-  document.addEventListener('mouseup', onResizeEnd);
+  document.addEventListener('pointermove', onResizeMove);
+  document.addEventListener('pointerup', onResizeEnd);
+  document.addEventListener('pointercancel', onResizeEnd);
 }
 function onResizeMove(ev) {
   if (!resizeState) return;
@@ -1289,20 +1325,28 @@ function onResizeMove(ev) {
 }
 function onResizeEnd() {
   resizeState = null;
-  document.removeEventListener('mousemove', onResizeMove);
-  document.removeEventListener('mouseup', onResizeEnd);
+  document.removeEventListener('pointermove', onResizeMove);
+  document.removeEventListener('pointerup', onResizeEnd);
+  document.removeEventListener('pointercancel', onResizeEnd);
 }
 
 function onCanvasMouseDown(ev) {
-  if (!roomMoveMode) return;
+  if (!roomMoveMode) {
+    if ((ev.target.id === 'canvas' || ev.target.id === 'gridCanvas') && placeSelectedPaletteArtifactAtEvent(ev)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+    return;
+  }
   if (ev.target.closest('.floor-item') || ev.target === roomGroupOutline) return;
   ev.preventDefault();
   ev.stopPropagation();
   const point = getCanvasPoint(ev);
   roomSelectionState = { startX: point.x, startY: point.y, currentX: point.x, currentY: point.y };
   updateRoomSelectionBox(point.x, point.y, point.x, point.y);
-  document.addEventListener('mousemove', onRoomSelectionMove);
-  document.addEventListener('mouseup', onRoomSelectionEnd);
+  document.addEventListener('pointermove', onRoomSelectionMove);
+  document.addEventListener('pointerup', onRoomSelectionEnd);
+  document.addEventListener('pointercancel', onRoomSelectionEnd);
 }
 
 function onRoomSelectionMove(ev) {
@@ -1339,8 +1383,9 @@ function onRoomSelectionEnd() {
   setGroupSelection(ids);
   roomSelectionState = null;
   hideRoomSelectionBox();
-  document.removeEventListener('mousemove', onRoomSelectionMove);
-  document.removeEventListener('mouseup', onRoomSelectionEnd);
+  document.removeEventListener('pointermove', onRoomSelectionMove);
+  document.removeEventListener('pointerup', onRoomSelectionEnd);
+  document.removeEventListener('pointercancel', onRoomSelectionEnd);
   suppressCanvasClick = true;
   setTimeout(() => { suppressCanvasClick = false; }, 0);
 }
@@ -1361,8 +1406,9 @@ function onGroupDragStart(ev) {
       return { id, x: item.x, y: item.y };
     })
   };
-  document.addEventListener('mousemove', onGroupDragMove);
-  document.addEventListener('mouseup', onGroupDragEnd);
+  document.addEventListener('pointermove', onGroupDragMove);
+  document.addEventListener('pointerup', onGroupDragEnd);
+  document.addEventListener('pointercancel', onGroupDragEnd);
 }
 
 function onGroupDragMove(ev) {
@@ -1387,8 +1433,9 @@ function onGroupDragMove(ev) {
 function onGroupDragEnd() {
   if (!groupDragState) return;
   groupDragState = null;
-  document.removeEventListener('mousemove', onGroupDragMove);
-  document.removeEventListener('mouseup', onGroupDragEnd);
+  document.removeEventListener('pointermove', onGroupDragMove);
+  document.removeEventListener('pointerup', onGroupDragEnd);
+  document.removeEventListener('pointercancel', onGroupDragEnd);
   suppressCanvasClick = true;
   setTimeout(() => { suppressCanvasClick = false; }, 0);
 }

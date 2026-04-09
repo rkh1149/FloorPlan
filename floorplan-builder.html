@@ -109,9 +109,17 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .render-placeholder { padding: 18px; text-align: center; font-size: 11px; line-height: 1.6; color: var(--text3); }
 .render-placeholder.loading { color: var(--text2); }
 .render-placeholder.error { color: var(--danger); }
-.render-image { width: 100%; height: 100%; object-fit: cover; display: block; }
+.render-image { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
 .render-actions { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--border); }
 .render-actions .btn { flex: 1; padding: 6px 10px; font-size: 11px; }
+.render-lightbox { position: fixed; inset: 0; background: rgba(27, 22, 16, .78); z-index: 500; display: none; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(6px); }
+.render-lightbox.visible { display: flex; }
+.render-lightbox-dialog { width: min(92vw, 1400px); height: min(90vh, 980px); background: rgba(255, 250, 241, .98); border: 1px solid var(--border2); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(27, 22, 16, .35); }
+.render-lightbox-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(247,239,226,.98), rgba(255,250,241,.92)); }
+.render-lightbox-title { font-family: var(--font-display); font-size: 18px; color: var(--accent); }
+.render-lightbox-actions { display: flex; gap: 8px; }
+.render-lightbox-body { flex: 1; padding: 16px; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #f6efe1, #e8ddca); }
+.render-lightbox-image { width: 100%; height: 100%; object-fit: contain; display: block; }
 
 @media (max-width: 1100px) {
   .render-grid { grid-template-columns: 1fr; }
@@ -246,6 +254,20 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 <div class="tooltip" id="tooltip"></div>
 <input type="file" id="floorplanFileInput" accept=".floorcraft,.json,application/json" style="display:none"/>
+<div class="render-lightbox" id="renderLightbox" onclick="closeRenderedImagePopup(event)">
+  <div class="render-lightbox-dialog">
+    <div class="render-lightbox-header">
+      <div class="render-lightbox-title" id="renderLightboxTitle">Rendered Plan</div>
+      <div class="render-lightbox-actions">
+        <button class="btn secondary" onclick="downloadCurrentRenderedImage()">Download</button>
+        <button class="btn secondary" onclick="closeRenderedImagePopup()">Close</button>
+      </div>
+    </div>
+    <div class="render-lightbox-body">
+      <img class="render-lightbox-image" id="renderLightboxImage" alt="Rendered floor plan preview"/>
+    </div>
+  </div>
+</div>
 
 <script>
 // ── Constants ──
@@ -715,7 +737,7 @@ function setRenderedViewState(id, state) {
   if (!body || !downloadBtn) return;
 
   if (renderedViews[id].imageUrl) {
-    body.innerHTML = `<img class="render-image" src="${renderedViews[id].imageUrl}" alt="${renderedViews[id].label || id} render"/>`;
+    body.innerHTML = `<img class="render-image" src="${renderedViews[id].imageUrl}" alt="${renderedViews[id].label || id} render" onclick="openRenderedImagePopup('${id}')"/>`;
     downloadBtn.disabled = false;
     return;
   }
@@ -878,6 +900,29 @@ function downloadRenderedView(id) {
   a.href = imageUrl;
   a.download = `floorplan-${id}-view.png`;
   a.click();
+}
+
+function openRenderedImagePopup(id = PRIMARY_RENDER_VIEW.id) {
+  const imageUrl = renderedViews[id]?.imageUrl;
+  if (!imageUrl) return;
+  const title = renderedViews[id]?.label || 'Rendered Plan';
+  document.getElementById('renderLightboxTitle').textContent = title;
+  document.getElementById('renderLightboxImage').src = imageUrl;
+  document.getElementById('renderLightbox').dataset.viewId = id;
+  document.getElementById('renderLightbox').classList.add('visible');
+}
+
+function closeRenderedImagePopup(event) {
+  if (event && event.target !== event.currentTarget) return;
+  const lightbox = document.getElementById('renderLightbox');
+  lightbox.classList.remove('visible');
+  lightbox.dataset.viewId = '';
+  document.getElementById('renderLightboxImage').src = '';
+}
+
+function downloadCurrentRenderedImage() {
+  const activeId = document.getElementById('renderLightbox').dataset.viewId || PRIMARY_RENDER_VIEW.id;
+  downloadRenderedView(activeId);
 }
 
 function applyGridSize(width, height) {

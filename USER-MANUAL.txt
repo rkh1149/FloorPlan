@@ -1,0 +1,376 @@
+FloorCraft User Manual
+
+This manual is written for someone using FloorCraft for the first time.
+
+What FloorCraft does
+
+FloorCraft helps you create, edit, save, and visualize floor plans. You can:
+
+- describe a space in plain language and let the app draft a layout
+- build a layout yourself by placing walls, rooms, furniture, and fixtures
+- move and resize items on a measured grid
+- move a whole room and everything inside it together
+- save a plan and open it again later
+- export the floor plan as an image
+- create a rendered image based on what is on the grid
+
+FloorCraft works with mouse and touch.
+
+Getting started
+
+When you open the app, you will see 4 main areas:
+
+1. Top controls
+   This is where you enter your prompt, generate a plan, change the grid size, zoom in and out, save or open a plan, render a view, clear the plan, and export a PNG.
+
+2. Artifacts panel on the left
+   This is the library of items you can place on the grid. It includes walls, doors, windows, rooms, furniture, kitchen items, bathroom items, and more.
+
+3. Main grid in the middle
+   This is the workspace where you build the floor plan. The grid is measured in feet.
+
+4. Inspector panel on the right
+   This shows the details for the selected item and lets you edit it.
+
+Before you begin
+
+The app has a Server API status button near the top.
+
+- If it shows that the server is ready, the AI features should work.
+- If the server is unavailable, you can still build and edit plans manually, but Generate and Render View may not work.
+
+Creating a floor plan
+
+You can create a floor plan in 2 ways.
+
+Option 1: Generate from text
+
+1. Click in the prompt box at the top.
+2. Type a description of the space you want.
+3. Click Generate.
+4. The app will place a suggested layout on the grid.
+
+Example prompts:
+
+- Primary bedroom with ensuite and walk-in closet
+- Small kitchen with island and dining table
+- Bathroom with shower, toilet, sink, and linen cabinet
+
+Option 2: Build it yourself
+
+1. Choose items from the Artifacts panel.
+2. Place walls or a room shape first.
+3. Add doors, windows, and fixtures.
+4. Add furniture and other details.
+
+Using the Artifacts panel
+
+The Artifacts panel includes categories such as:
+
+- Structure
+  Walls, exterior walls, doors, windows, sliding doors, stairs
+
+- Living
+  Sofas, chairs, tables, shelves, fireplace, sectional sofa, loveseat, ottoman, accent chair, console table
+
+- Bedroom
+  Queen bed, king bed, twin bed, dresser, nightstand, wardrobe, desk, bunk bed, bench, vanity, crib
+
+- Kitchen
+  Counter, island, stove, refrigerator, dining table, bar stools, kitchen sink, dishwasher, microwave, washer, dryer
+
+- Bathroom
+  Toilet, sink, shower, bathtub, double vanity, linen cabinet, towel rack
+
+- Rooms
+  Room, closet, loft, hallway, entry or foyer, pantry, mudroom, office, garage, balcony, patio, utility room, closet island
+
+How to place items
+
+With a mouse:
+
+1. Drag an artifact from the left panel onto the grid.
+2. Release it where you want it.
+
+On a touch device:
+
+1. Tap an artifact in the left panel.
+2. Tap the grid where you want to place it.
+
+Selecting and editing items
+
+To select an item:
+
+- Click it with a mouse
+- Or tap it on a touch device
+
+When an item is selected, the Inspector opens on the right.
+
+In the Inspector, you can change:
+
+- Label
+- Notes
+- Width
+- Depth
+- X position
+- Y position
+- Color
+
+You can also:
+
+- rotate the item by 90 degrees
+- delete the item
+
+Measurements
+
+FloorCraft supports measurements with one decimal place.
+
+Examples:
+
+- 4
+- 4.2
+- 12.5
+
+You can use this for:
+
+- width
+- depth
+- X position
+- Y position
+
+When editing a number, finish the value and then press Enter, Return, or click out of the field.
+
+Moving items
+
+To move one item:
+
+- drag it with the mouse
+- or drag it with your finger on a touch device
+
+To resize one item:
+
+- drag the resize handle on the selected item
+- or change Width and Depth in the Inspector
+
+Rooms and moving a whole room
+
+FloorCraft can move a whole room and its contents together.
+
+There are 2 main ways this works:
+
+1. Room artifacts
+   If you use a Room, Loft, Office, Garage, Hallway, or another room-style artifact, items placed inside it can be moved with it in Move Room mode.
+
+2. Rooms made from 4 walls
+   If you build a simple closed room using 4 walls, FloorCraft can treat that wall layout as a room and move the walls and inside contents together.
+
+How to move a whole room
+
+1. Click Move Room.
+2. Select the room.
+   You can do this by clicking a room area or by dragging a selection box around the room.
+3. A highlighted outline will appear.
+4. Drag the highlighted outline to move the whole room.
+5. Click Move Room again when you are done.
+
+Helpful note:
+
+- Smaller rooms inside larger rooms can also be selected and moved.
+- If a room contains furniture or fixtures, those items move with the room when they are part of that room selection.
+
+Walls and wall snapping
+
+Walls can snap to existing wall lines so they line up more cleanly.
+
+This helps when:
+
+- extending a wall
+- placing another wall beside it
+- building a rectangular room from 4 walls
+
+Grid size and zoom
+
+Grid size changes the size of your working area.
+Zoom changes how large the plan appears on the screen.
+
+Changing grid size
+
+Use the Grid controls at the top to make the workspace larger or smaller in feet.
+
+This is useful when:
+
+- you need more building space
+- you want a larger overall floor area
+
+Changing zoom
+
+Use the Zoom control to zoom in or out without changing the real size of the plan.
+
+Zoom is useful when:
+
+- you want a closer look at a small area
+- you want more room to move items precisely
+
+What to remember:
+
+- Grid size changes the workspace.
+- Zoom changes only the view.
+- Real dimensions stay the same.
+
+Saving and opening a plan
+
+Save Plan stores your current work in a FloorCraft file.
+Open Plan lets you bring that file back into the app later.
+
+What is saved:
+
+- the prompt text
+- grid size
+- zoom level
+- item positions
+- item names
+- notes
+- colors
+- sizes
+
+The saved file uses the .floorcraft extension.
+
+On some browsers, Save Plan may open the normal save dialog.
+On others, it may download the file instead.
+
+If you want to choose the save location directly, Chrome or Edge usually gives the best experience.
+
+Opening a saved plan
+
+1. Click Open Plan.
+2. Choose a .floorcraft file from your device.
+3. The saved plan will load back into the app.
+
+Clearing the plan
+
+Click Clear to remove everything from the grid and start over.
+
+This also clears the current rendered result.
+
+Exporting the floor plan
+
+Click Export PNG to save an image of the floor plan itself.
+
+This is useful when you want:
+
+- a quick shareable image
+- a snapshot of the current layout
+- a simple visual record of the plan
+
+Rendering a view
+
+Render View creates one AI-generated image based on the current floor plan.
+
+The rendered image is based on:
+
+- the prompt you entered
+- the items on the grid
+- where those items are placed
+- the occupied floor area of the actual layout
+
+Important:
+
+- The render is intended to follow the grid layout closely.
+- The render prompt is designed to use only items shown on the grid.
+- It is still a generated image, so it should be treated as a visual concept, not a construction document.
+
+How to render
+
+1. Build or generate a floor plan.
+2. Click Render View.
+3. Wait for the rendered image to appear in the Rendered View panel.
+
+Rendered View panel
+
+The Rendered View panel shows:
+
+- the current rendered image
+- the exact prompt used to create it
+- a Regenerate View button
+
+You can edit the prompt in the panel and click Regenerate View to try another version while still using the current floor plan as the basis.
+
+Viewing the full rendered image
+
+If the rendered image is too large for the panel:
+
+1. Click the preview image.
+2. A larger popup viewer opens.
+3. You can scroll inside that viewer if needed.
+4. You can also download the rendered image from there.
+
+Touch screen use
+
+FloorCraft supports touch-only devices as well as devices that have both touch and mouse.
+
+On touch devices, you can:
+
+- tap an artifact, then tap the grid to place it
+- tap items to select them
+- drag items with your finger
+- resize items
+- move rooms
+- use the Inspector to edit item details
+
+If your device has both touch and mouse, you can use either one.
+
+Helpful ways to work
+
+A good basic workflow is:
+
+1. Set the grid size.
+2. Add a Room artifact or build the room with walls.
+3. Add doors and windows.
+4. Add furniture and fixtures.
+5. Fine-tune sizes and positions in the Inspector.
+6. Use Move Room if you want to shift a whole space.
+7. Save the plan.
+8. Render a view if you want a visual concept image.
+9. Export a PNG if you want a simple floor plan image.
+
+Common tips
+
+- Start with the room shape first.
+- Use the Inspector for precise sizes and positions.
+- Use one decimal place when you need finer control.
+- Increase the grid size if you run out of room.
+- Zoom in before making small adjustments.
+- Save your plan regularly.
+
+If something is not working
+
+If Generate or Render View does not work:
+
+- check the Server API status
+- make sure the app owner’s server is running
+
+If Save Plan downloads the file instead of opening a save window:
+
+- that is normal in some browsers
+- Chrome or Edge may provide a fuller save dialog
+
+If you accidentally move into a special mode:
+
+- click Move Room again to turn it off
+- or press Escape
+
+Quick start example
+
+If you want a simple first project, try this:
+
+1. Enter: Small bathroom with shower, toilet, sink, and linen cabinet.
+2. Click Generate.
+3. Select one item and change its size.
+4. Add a towel rack from the left panel.
+5. Turn on Move Room and move the bathroom.
+6. Save the plan.
+7. Click Render View.
+8. Open the large rendered image viewer.
+9. Export the floor plan as a PNG.
+
+After that, you will have used the main features of the app.

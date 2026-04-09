@@ -1144,6 +1144,21 @@ function isRectContained(inner, outer) {
     inner.bottom <= outer.bottom;
 }
 
+function isPointInsideRect(x, y, rect) {
+  return x >= rect.left &&
+    x <= rect.right &&
+    y >= rect.top &&
+    y <= rect.bottom;
+}
+
+function isItemInsideInferredRoom(item, roomRect) {
+  const rect = getItemRect(item);
+  if (isRectContained(rect, roomRect)) return true;
+  const centerX = (rect.left + rect.right) / 2;
+  const centerY = (rect.top + rect.bottom) / 2;
+  return isPointInsideRect(centerX, centerY, roomRect);
+}
+
 function getRoomSelectionIds(roomId) {
   const room = items.find(item => item.id === roomId);
   if (!room) return [];
@@ -1210,7 +1225,7 @@ function detectInferredWallRooms() {
           const selectionIds = items
             .filter(item => {
               if ([top.id, bottom.id, left.id, right.id].includes(item.id)) return true;
-              return isRectContained(getItemRect(item), innerRect);
+              return isItemInsideInferredRoom(item, innerRect);
             })
             .map(item => item.id);
 

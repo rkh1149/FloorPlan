@@ -1993,6 +1993,112 @@ function createRenderReferenceImageDataUrl() {
   return createFloorplanSnapshotCanvas().toDataURL('image/png');
 }
 
+function escapeXml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function getIconInnerMarkup(type, color) {
+  return makeIcon(type, color)
+    .replace(/^<svg[^>]*>/, '')
+    .replace(/<\/svg>$/, '');
+}
+
+function buildFloorplanExportSvg(width, height) {
+  const rootStyles = getComputedStyle(document.documentElement);
+  const bg = rootStyles.getPropertyValue('--bg').trim();
+  const grid = rootStyles.getPropertyValue('--grid').trim();
+  const gridStrong = rootStyles.getPropertyValue('--grid-strong').trim();
+  const labelColor = rootStyles.getPropertyValue('--text').trim();
+  const dimColor = rootStyles.getPropertyValue('--text2').trim();
+
+  const gridLines = [];
+  for (let x = 0; x < width; x += CELL) {
+    gridLines.push(`<line x1="${x}" y1="0" x2="${x}" y2="${height}" stroke="${grid}" stroke-width="1"/>`);
+  }
+  for (let y = 0; y < height; y += CELL) {
+    gridLines.push(`<line x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="${grid}" stroke-width="1"/>`);
+  }
+  for (let x = 0; x < width; x += CELL * 5) {
+    gridLines.push(`<line x1="${x}" y1="0" x2="${x}" y2="${height}" stroke="${gridStrong}" stroke-width="1"/>`);
+  }
+  for (let y = 0; y < height; y += CELL * 5) {
+    gridLines.push(`<line x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="${gridStrong}" stroke-width="1"/>`);
+  }
+
+  const itemMarkup = items
+    .slice()
+    .sort((a, b) => resolveItemZ(a) - resolveItemZ(b))
+    .map(item => {
+      const x = item.x;
+      const y = item.y;
+      const iw = item.w * CELL;
+      const ih = item.h * CELL;
+      const nameY = y + ih + 18;
+      const dimsY = y + ih + 32;
+      const iconColor = item.color || '#3a3830';
+      const iconInner = getIconInnerMarkup(item.icon || item.type, iconColor);
+      const backgroundId = `iconGlow-${item.id}`;
+      return `
+        <g>
+          <defs>
+            <radialGradient id="${backgroundId}" cx="30%" cy="20%" r="80%">
+              <stop offset="0%" stop-color="rgba(255,255,255,0.38)"/>
+              <stop offset="45%" stop-color="rgba(255,255,255,0)"/>
+              <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+            </radialGradient>
+          </defs>
+          <rect x="${x}" y="${y}" width="${iw}" height="${ih}" rx="12" ry="12" fill="url(#${backgroundId})"/>
+          <svg x="${x}" y="${y}" width="${iw}" height="${ih}" viewBox="0 0 36 36" preserveAspectRatio="none">
+            ${iconInner}
+          </svg>
+          <text x="${x + iw / 2}" y="${nameY}" text-anchor="middle" font-family="Cormorant Garamond, Georgia, serif" font-size="14" font-weight="600" fill="${labelColor}">${escapeXml(item.name)}</text>
+          <text x="${x + iw / 2}" y="${dimsY}" text-anchor="middle" font-family="DM Mono, monospace" font-size="11" fill="${dimColor}">${escapeXml(`${formatFeet(item.w)} × ${formatFeet(item.h)} ft`)}</text>
+        </g>
+      `;
+    })
+    .join('');
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <rect width="${width}" height="${height}" fill="${bg}"/>
+      ${gridLines.join('')}
+      ${itemMarkup}
+    </svg>
+  `;
+}
+
+async function createFloorplanExportCanvas() {
+  const c = document.getElementById('canvas');
+  const width = c.clientWidth;
+  const height = c.clientHeight;
+  const svg = buildFloorplanExportSvg(width, height);
+  const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('The floor plan export image could not be created.'));
+      img.src = url;
+    });
+
+    const canvasEl = document.createElement('canvas');
+    canvasEl.width = width;
+    canvasEl.height = height;
+    const ctx = canvasEl.getContext('2d');
+    ctx.drawImage(image, 0, 0);
+    return canvasEl;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 // ── Inspector ──
 const colorPalette = ['#4a5060','#3a5048','#5a4a38','#4a4858','#3a4848','#5a5038','#5a5650','#4a6a7a','#c47a6a','#8fa87a'];
 
@@ -2232,40 +2338,17 @@ document.addEventListener('keydown', ev => {
 });
 
 // ── Export ──
-function exportPNG() {
-  const c = document.getElementById('canvas');
-  const w = c.clientWidth, h = c.clientHeight;
-  const exp = document.createElement('canvas');
-  exp.width = w; exp.height = h;
-  const ctx = exp.getContext('2d');
-  const rootStyles = getComputedStyle(document.documentElement);
-  ctx.fillStyle = rootStyles.getPropertyValue('--bg').trim(); ctx.fillRect(0,0,w,h);
-  // draw grid
-  ctx.strokeStyle = rootStyles.getPropertyValue('--grid').trim(); ctx.lineWidth = 1;
-  for (let x=0; x<w; x+=CELL) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-  for (let y=0; y<h; y+=CELL) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
-  ctx.strokeStyle = rootStyles.getPropertyValue('--grid-strong').trim();
-  for (let x=0; x<w; x+=CELL*5) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-  for (let y=0; y<h; y+=CELL*5) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
-  // draw items
-  items.forEach(item => {
-    ctx.fillStyle = item.color || '#3a3830';
-    const rx = 3;
-    const x=item.x, y=item.y, iw=item.w*CELL, ih=item.h*CELL;
-    ctx.beginPath();
-    ctx.moveTo(x+rx,y); ctx.lineTo(x+iw-rx,y); ctx.arcTo(x+iw,y,x+iw,y+rx,rx);
-    ctx.lineTo(x+iw,y+ih-rx); ctx.arcTo(x+iw,y+ih,x+iw-rx,y+ih,rx);
-    ctx.lineTo(x+rx,y+ih); ctx.arcTo(x,y+ih,x,y+ih-rx,rx);
-    ctx.lineTo(x,y+rx); ctx.arcTo(x,y,x+rx,y,rx);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = lightenHex(item.color||'#3a3830', 30); ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.fillStyle = lightenHex(item.color||'#3a3830', 80);
-    ctx.font = '9px DM Mono, monospace'; ctx.textAlign = 'center';
-    ctx.fillText(item.name, x+iw/2, y+ih-4);
-  });
-  const url = exp.toDataURL();
-  const a = document.createElement('a'); a.href = url; a.download = 'floorplan.png'; a.click();
+async function exportPNG() {
+  try {
+    const exp = await createFloorplanExportCanvas();
+    const url = exp.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'floorplan.png';
+    a.click();
+  } catch (err) {
+    alert('Export PNG failed.\n' + (err.message || 'The floor plan image could not be exported.'));
+  }
 }
 
 // ── Init ──

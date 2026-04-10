@@ -1,0 +1,20 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/config.js": {
+      "maxDuration": 10
+    },
+    "api/generate-floorplan.js": {
+      "maxDuration": 60
+    },
+    "api/render-view.js": {
+      "maxDuration": 300
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/floorplan-builder.html"
+    }
+  ]
+}

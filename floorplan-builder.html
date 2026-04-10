@@ -1804,6 +1804,103 @@ function centerGeneratedPlan(plan) {
   }));
 }
 
+function getPlanItemRect(item) {
+  const x = Number(item.x) || 0;
+  const y = Number(item.y) || 0;
+  const w = Number(item.w) || 0;
+  const h = Number(item.h) || 0;
+  return {
+    left: x,
+    top: y,
+    right: x + w,
+    bottom: y + h
+  };
+}
+
+function isPlanItemInsideRoom(item, roomRect) {
+  const rect = getPlanItemRect(item);
+  const fullyContained = rect.left >= roomRect.left &&
+    rect.top >= roomRect.top &&
+    rect.right <= roomRect.right &&
+    rect.bottom <= roomRect.bottom;
+  if (fullyContained) return true;
+  const centerX = (rect.left + rect.right) / 2;
+  const centerY = (rect.top + rect.bottom) / 2;
+  return isPointInsideRect(centerX, centerY, roomRect);
+}
+
+function applyGeneratedRoomGroups(plan) {
+  if (!Array.isArray(plan) || !plan.length) return plan;
+
+  const normalized = plan.map(item => ({
+    ...item,
+    roomGroup: typeof item.roomGroup === 'string' ? item.roomGroup : ''
+  }));
+  const horizontals = normalized.filter(item => getWallOrientation(item) === 'horizontal');
+  const verticals = normalized.filter(item => getWallOrientation(item) === 'vertical');
+  const seen = new Set();
+  let generatedGroupCount = 1;
+
+  horizontals.forEach(top => {
+    horizontals.forEach(bottom => {
+      if (top === bottom) return;
+      if (!roughlyEqualFeet(Number(top.x) || 0, Number(bottom.x) || 0) || !roughlyEqualFeet(Number(top.w) || 0, Number(bottom.w) || 0)) return;
+      if ((Number(bottom.y) || 0) <= (Number(top.y) || 0)) return;
+
+      verticals.forEach(left => {
+        verticals.forEach(right => {
+          if (left === right) return;
+          if (!roughlyEqualFeet(Number(left.y) || 0, Number(right.y) || 0) || !roughlyEqualFeet(Number(left.h) || 0, Number(right.h) || 0)) return;
+          if ((Number(right.x) || 0) <= (Number(left.x) || 0)) return;
+
+          const topLeft = Number(top.x) || 0;
+          const topRight = topLeft + (Number(top.w) || 0);
+          const topY = Number(top.y) || 0;
+          const bottomBottom = (Number(bottom.y) || 0) + (Number(bottom.h) || 0);
+          const leftX = Number(left.x) || 0;
+          const rightRight = (Number(right.x) || 0) + (Number(right.w) || 0);
+          const leftTop = Number(left.y) || 0;
+          const leftBottom = leftTop + (Number(left.h) || 0);
+
+          if (
+            !roughlyEqualFeet(leftX, topLeft) ||
+            !roughlyEqualFeet(rightRight, topRight) ||
+            !roughlyEqualFeet(leftTop, topY) ||
+            !roughlyEqualFeet(leftBottom, bottomBottom)
+          ) {
+            return;
+          }
+
+          const key = [top.name, bottom.name, left.name, right.name, topLeft, topY, rightRight, bottomBottom].join(':');
+          if (seen.has(key)) return;
+          seen.add(key);
+
+          const innerRect = {
+            left: leftX + (Number(left.w) || 0),
+            top: topY + (Number(top.h) || 0),
+            right: Number(right.x) || 0,
+            bottom: Number(bottom.y) || 0
+          };
+          if (innerRect.right <= innerRect.left || innerRect.bottom <= innerRect.top) return;
+
+          const groupId = top.roomGroup || bottom.roomGroup || left.roomGroup || right.roomGroup || `generated-room-${generatedGroupCount++}`;
+          [top, bottom, left, right].forEach(wall => {
+            wall.roomGroup = groupId;
+          });
+
+          normalized.forEach(item => {
+            if (item.roomGroup) return;
+            if (item === top || item === bottom || item === left || item === right) return;
+            if (isPlanItemInsideRoom(item, innerRect)) item.roomGroup = groupId;
+          });
+        });
+      });
+    });
+  });
+
+  return normalized;
+}
+
 function loadFloorplanSnapshot(snapshot) {
   if (!snapshot || !Array.isArray(snapshot.items)) {
     throw new Error('This file does not contain a valid FloorCraft plan.');
@@ -2084,7 +2181,7 @@ async function generateFloorplan() {
       throw new Error(message);
     }
 
-    const plan = centerGeneratedPlan(data?.items);
+    const plan = applyGeneratedRoomGroups(centerGeneratedPlan(data?.items));
     if (!Array.isArray(plan)) {
       throw new Error('OpenAI response was not a valid floor plan payload.');
     }

@@ -43,7 +43,7 @@ const FLOORPLAN_RESPONSE_FORMAT = {
             roomGroup: { type: 'string' },
             z: { type: 'integer', minimum: 1, maximum: 10 }
           },
-          required: ['type', 'name', 'desc', 'x', 'y', 'w', 'h', 'color', 'z']
+          required: ['type', 'name', 'desc', 'x', 'y', 'w', 'h', 'color', 'roomGroup', 'z']
         }
       }
     },
@@ -125,7 +125,7 @@ function floorplanSystemPrompt(gridWidth, gridHeight) {
 
 CATALOG of valid type IDs: ${FLOORPLAN_TYPE_IDS.join(', ')}
 
-Each item: { "type": "<id>", "name": "<label>", "desc": "<short description>", "x": <grid units>, "y": <grid units>, "w": <width in ft>, "h": <depth in ft>, "color": "<hex color>", "roomGroup": "<shared room id when applicable>", "z": <z-index 1-10> }
+Each item: { "type": "<id>", "name": "<label>", "desc": "<short description>", "x": <grid units>, "y": <grid units>, "w": <width in ft>, "h": <depth in ft>, "color": "<hex color>", "roomGroup": "<shared room id or empty string>", "z": <z-index 1-10> }
 
 COLORS by type:
 - walls/ext-walls: #5a5650 or #3a3830
@@ -140,9 +140,10 @@ Rules:
 - Grid units = feet. Canvas is ~${gridWidth} ft wide x ${gridHeight} ft tall (origin top-left).
 - Place ext-walls FIRST around the perimeter. Use z:1 for walls, z:2 for furniture.
 - Rooms inside: use room-type items for room labels if needed, or just fill with furniture.
+- Always include roomGroup on every item.
 - When a space is enclosed by generated walls and should move as one room, assign the same non-empty roomGroup string to every wall that defines that room and every artifact located inside that room.
 - Use distinct roomGroup values for different enclosed rooms, for example "room-1", "room-2", "ensuite-1", or "closet-1".
-- For items not belonging to a movable generated room group, omit roomGroup.
+- For items not belonging to a movable generated room group, use an empty string for roomGroup.
 - Leave realistic spacing: 3-4 ft clearance around beds, 2 ft around toilets.
 - Do not overlap item footprints. Every item must occupy its own clear position on the grid.
 - Snap all x/y to multiples of 1.

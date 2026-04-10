@@ -1457,6 +1457,17 @@ function onItemMouseDown(ev, id) {
   if (ev.target.classList.contains('resize-handle') || ev.target.classList.contains('delete-btn')) return;
   if (roomMoveMode) {
     const item = items.find(i => i.id === id);
+    if (item && isBackgroundArtifact(item.type)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const roomSelectionIds = getRoomSelectionIds(id);
+      if (selectionMatches(roomSelectionIds)) {
+        onGroupDragStart(ev);
+      } else {
+        setGroupSelection(roomSelectionIds);
+      }
+      return;
+    }
     const explicitRoomSelectionIds = getExplicitRoomGroupSelectionIds(id);
     if (explicitRoomSelectionIds.length > 1) {
       ev.preventDefault();
@@ -1480,17 +1491,6 @@ function onItemMouseDown(ev, id) {
         }
         return;
       }
-    }
-    if (item && isBackgroundArtifact(item.type)) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      const roomSelectionIds = getRoomSelectionIds(id);
-      if (selectionMatches(roomSelectionIds)) {
-        onGroupDragStart(ev);
-      } else {
-        setGroupSelection(roomSelectionIds);
-      }
-      return;
     }
     if (isGroupSelected(id)) onGroupDragStart(ev);
     return;

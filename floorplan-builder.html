@@ -1774,6 +1774,36 @@ function openFloorplanFile() {
   input.click();
 }
 
+function centerGeneratedPlan(plan) {
+  if (!Array.isArray(plan) || !plan.length) return plan;
+
+  const bounds = plan.reduce((acc, item) => {
+    const x = Number(item.x) || 0;
+    const y = Number(item.y) || 0;
+    const w = Number(item.w) || 0;
+    const h = Number(item.h) || 0;
+    return {
+      minX: Math.min(acc.minX, x),
+      minY: Math.min(acc.minY, y),
+      maxX: Math.max(acc.maxX, x + w),
+      maxY: Math.max(acc.maxY, y + h)
+    };
+  }, { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+
+  const footprintWidth = Math.max(0, bounds.maxX - bounds.minX);
+  const footprintHeight = Math.max(0, bounds.maxY - bounds.minY);
+  const targetMinX = Math.max(0, Math.round((gridWidth - footprintWidth) / 2));
+  const targetMinY = Math.max(0, Math.round((gridHeight - footprintHeight) / 2));
+  const shiftX = targetMinX - bounds.minX;
+  const shiftY = targetMinY - bounds.minY;
+
+  return plan.map(item => ({
+    ...item,
+    x: Math.max(0, Math.round((Number(item.x) || 0) + shiftX)),
+    y: Math.max(0, Math.round((Number(item.y) || 0) + shiftY))
+  }));
+}
+
 function loadFloorplanSnapshot(snapshot) {
   if (!snapshot || !Array.isArray(snapshot.items)) {
     throw new Error('This file does not contain a valid FloorCraft plan.');
@@ -2054,7 +2084,7 @@ async function generateFloorplan() {
       throw new Error(message);
     }
 
-    const plan = data?.items;
+    const plan = centerGeneratedPlan(data?.items);
     if (!Array.isArray(plan)) {
       throw new Error('OpenAI response was not a valid floor plan payload.');
     }

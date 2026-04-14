@@ -1242,40 +1242,75 @@ function getNearestWallCorner(point) {
     .sort((a, b) => a.distance - b.distance)[0] || null;
 }
 
-function getWallTemplateForSegment(start, end, baseType = 'wall-h') {
+function getTemplateRectInPixels(tmpl) {
+  return {
+    left: tmpl.x,
+    top: tmpl.y,
+    right: tmpl.x + tmpl.w * CELL,
+    bottom: tmpl.y + tmpl.h * CELL
+  };
+}
+
+function getRectOverlapArea(a, b) {
+  const width = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+  const height = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+  return width * height;
+}
+
+function getTemplateBoundsPenalty(tmpl) {
+  let penalty = 0;
+  if (tmpl.x < 0) penalty += Math.abs(tmpl.x);
+  if (tmpl.y < 0) penalty += Math.abs(tmpl.y);
+  penalty += Math.max(0, tmpl.x + tmpl.w * CELL - gridWidth * CELL);
+  penalty += Math.max(0, tmpl.y + tmpl.h * CELL - gridHeight * CELL);
+  return penalty;
+}
+
+function chooseConnectedWallTemplate(candidates, previousItem) {
+  if (!previousItem) return candidates[0];
+  const previousRect = getItemRect(previousItem);
+  return candidates
+    .map(tmpl => ({
+      tmpl,
+      overlap: getRectOverlapArea(getTemplateRectInPixels(tmpl), previousRect),
+      penalty: getTemplateBoundsPenalty(tmpl)
+    }))
+    .sort((a, b) => {
+      if (a.penalty !== b.penalty) return a.penalty - b.penalty;
+      if (a.overlap !== b.overlap) return b.overlap - a.overlap;
+      return 0;
+    })[0].tmpl;
+}
+
+function getWallTemplateForSegment(start, end, baseType = 'wall-h', previousItem = null) {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const useHorizontal = Math.abs(dx) >= Math.abs(dy);
   const isExterior = String(baseType || '').startsWith('ext-wall');
   if (useHorizontal) {
     const length = Math.max(1, roundToFootPrecision(Math.abs(dx) / CELL));
-    return {
+    const base = {
       type: isExterior ? 'ext-wall-h' : 'wall-h',
       x: Math.min(start.x, end.x),
-      y: start.y,
       w: length,
       h: 1
     };
+    return chooseConnectedWallTemplate([
+      { ...base, y: start.y },
+      { ...base, y: start.y - CELL }
+    ], previousItem);
   }
   const length = Math.max(1, roundToFootPrecision(Math.abs(dy) / CELL));
-  return {
+  const base = {
     type: isExterior ? 'ext-wall-v' : 'wall-v',
-    x: start.x,
     y: Math.min(start.y, end.y),
     w: 1,
     h: length
   };
-}
-
-function getWallSegmentEndpoint(item, start) {
-  const rect = getItemRect(item);
-  return getWallCorners(item)
-    .filter(corner => !(corner.x === start.x && corner.y === start.y))
-    .sort((a, b) => {
-      const aDistance = Math.hypot(a.x - start.x, a.y - start.y);
-      const bDistance = Math.hypot(b.x - start.x, b.y - start.y);
-      return bDistance - aDistance;
-    })[0] || { x: rect.right, y: rect.bottom };
+  return chooseConnectedWallTemplate([
+    { ...base, x: start.x },
+    { ...base, x: start.x - CELL }
+  ], previousItem);
 }
 
 function setWallChainState(nextState) {
@@ -1308,6 +1343,7 @@ function startWallChainDrag(ev, item, corner) {
     baseType: item.type,
     direction: null,
     activeItemId: null,
+    connectionItemId: item.id,
     sourceItemId: item.id
   });
   selectedId = null;
@@ -1337,7 +1373,8 @@ function updateWallChainActiveSegment(endPoint) {
   const end = endPoint;
   if (Math.abs(end.x - start.x) < CELL && Math.abs(end.y - start.y) < CELL) return true;
 
-  const tmpl = getWallTemplateForSegment(start, end, wallChainState.baseType);
+  const previousItem = items.find(entry => entry.id === wallChainState.connectionItemId);
+  const tmpl = getWallTemplateForSegment(start, end, wallChainState.baseType, previousItem);
   let item = items.find(entry => entry.id === wallChainState.activeItemId);
   if (!item) {
     item = addItem({
@@ -1361,9 +1398,8 @@ function updateWallChainActiveSegment(endPoint) {
     constrainItemToGrid(item);
     renderItem(item);
   }
-  const segmentEndpoint = getWallSegmentEndpoint(item, start);
-  wallChainState.currentX = segmentEndpoint.x;
-  wallChainState.currentY = segmentEndpoint.y;
+  wallChainState.currentX = end.x;
+  wallChainState.currentY = end.y;
   wallChainState.baseType = item.type;
   selectedId = null;
   renderAll();
@@ -1389,6 +1425,7 @@ function onWallChainDragMove(ev) {
       : Math.abs(dx) >= CELL && Math.abs(dx) >= Math.max(CELL, Math.abs(target.y - wallChainState.currentY));
 
     if (shouldTurn && wallChainState.activeItemId) {
+      wallChainState.connectionItemId = wallChainState.activeItemId;
       wallChainState.anchorX = wallChainState.currentX;
       wallChainState.anchorY = wallChainState.currentY;
       wallChainState.activeItemId = null;

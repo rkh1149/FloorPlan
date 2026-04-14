@@ -87,6 +87,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .floor-item.selected .delete-btn { opacity: 1; }
 .floor-item.grouped .item-icon { box-shadow: 0 0 0 1px rgba(122, 158, 181, .95), 0 10px 18px rgba(90, 72, 50, .12); }
 #canvas.room-move-active { cursor: crosshair; }
+#canvas.wall-chain-active { cursor: crosshair; }
 #canvas.room-move-active .resize-handle,
 #canvas.room-move-active .delete-btn { opacity: 0 !important; pointer-events: none; }
 .room-selection-box { position: absolute; border: 1px dashed var(--accent3); background: rgba(122, 158, 181, .12); pointer-events: none; z-index: 60; display: none; }
@@ -450,6 +451,7 @@ const HORIZONTAL_WALL_TYPES = new Set(['wall-h', 'ext-wall-h']);
 const VERTICAL_WALL_TYPES = new Set(['wall-v', 'ext-wall-v']);
 const WALL_SNAP_THRESHOLD_FEET = 0.6;
 const ROOM_DETECTION_TOLERANCE_FEET = 0.25;
+const WALL_CHAIN_CORNER_HIT_PX = 16;
 
 function isBackgroundArtifact(type) {
   return BACKGROUND_ARTIFACT_TYPES.has(String(type || '').trim());
@@ -588,6 +590,8 @@ let renderedViews = {};
 let renderingViews = false;
 let serverApiConfigured = false;
 let selectedPaletteArtifactId = null;
+let wallChainState = null;
+let wallChainCounter = 0;
 
 // ── Build palette ──
 function setSelectedPaletteArtifact(artifactId = null) {
@@ -1172,9 +1176,141 @@ function getRoomSelectionIds(roomId) {
 function getExplicitRoomGroupSelectionIds(itemId) {
   const item = items.find(entry => entry.id === itemId);
   if (!item?.roomGroup) return [];
+  const grouped = items.filter(entry => entry.roomGroup === item.roomGroup);
+  const groupIds = grouped.map(entry => entry.id);
+  const groupedWalls = grouped.filter(entry => isWallArtifact(entry.type));
+  if (groupedWalls.length < 4) return groupIds;
+
+  const bounds = groupedWalls.reduce((acc, wall) => {
+    const rect = getItemRect(wall);
+    return {
+      left: Math.min(acc.left, rect.left),
+      top: Math.min(acc.top, rect.top),
+      right: Math.max(acc.right, rect.right),
+      bottom: Math.max(acc.bottom, rect.bottom)
+    };
+  }, { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
+
+  const interiorRect = {
+    left: bounds.left + CELL,
+    top: bounds.top + CELL,
+    right: bounds.right - CELL,
+    bottom: bounds.bottom - CELL
+  };
+
+  if (interiorRect.right <= interiorRect.left || interiorRect.bottom <= interiorRect.top) return groupIds;
+
   return items
-    .filter(entry => entry.roomGroup === item.roomGroup)
+    .filter(entry => groupIds.includes(entry.id) || isItemInsideInferredRoom(entry, interiorRect))
     .map(entry => entry.id);
+}
+
+function getWallCorners(item) {
+  const rect = getItemRect(item);
+  return [
+    { x: rect.left, y: rect.top },
+    { x: rect.right, y: rect.top },
+    { x: rect.left, y: rect.bottom },
+    { x: rect.right, y: rect.bottom }
+  ];
+}
+
+function getNearestWallCornerFromEvent(ev, item) {
+  if (!item || !isWallArtifact(item.type)) return null;
+  const rect = canvas.getBoundingClientRect();
+  const pointer = {
+    x: ev.clientX - rect.left,
+    y: ev.clientY - rect.top
+  };
+  return getWallCorners(item)
+    .map(corner => ({
+      x: snap(corner.x),
+      y: snap(corner.y),
+      distance: Math.hypot(pointer.x - corner.x, pointer.y - corner.y)
+    }))
+    .filter(corner => corner.distance <= WALL_CHAIN_CORNER_HIT_PX)
+    .sort((a, b) => a.distance - b.distance)[0] || null;
+}
+
+function getWallTemplateForSegment(start, end, baseType = 'wall-h') {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const useHorizontal = Math.abs(dx) >= Math.abs(dy);
+  const isExterior = String(baseType || '').startsWith('ext-wall');
+  if (useHorizontal) {
+    const length = Math.max(1, roundToFootPrecision(Math.abs(dx) / CELL));
+    return {
+      type: isExterior ? 'ext-wall-h' : 'wall-h',
+      x: Math.min(start.x, end.x),
+      y: start.y,
+      w: length,
+      h: 1
+    };
+  }
+  const length = Math.max(1, roundToFootPrecision(Math.abs(dy) / CELL));
+  return {
+    type: isExterior ? 'ext-wall-v' : 'wall-v',
+    x: start.x,
+    y: Math.min(start.y, end.y),
+    w: 1,
+    h: length
+  };
+}
+
+function getConstrainedWallChainPoint(start, target) {
+  const dx = target.x - start.x;
+  const dy = target.y - start.y;
+  return Math.abs(dx) >= Math.abs(dy)
+    ? { x: target.x, y: start.y }
+    : { x: start.x, y: target.y };
+}
+
+function setWallChainState(nextState) {
+  wallChainState = nextState;
+  canvas.classList.toggle('wall-chain-active', !!wallChainState);
+}
+
+function stopWallChain() {
+  setWallChainState(null);
+  updateEmptyInspector();
+}
+
+function startWallChainFromCorner(ev, item, corner) {
+  const groupId = item.roomGroup || `drawn-room-${++wallChainCounter}`;
+  item.roomGroup = groupId;
+  renderItem(item);
+  setWallChainState({
+    x: corner.x,
+    y: corner.y,
+    roomGroup: groupId,
+    baseType: item.type
+  });
+  selectedId = null;
+  updateEmptyInspector('Wall drawing is active. Tap or click the next point to create a connected wall segment. Press Escape when finished.');
+}
+
+function extendWallChainToPoint(targetPoint) {
+  if (!wallChainState) return false;
+  const start = { x: wallChainState.x, y: wallChainState.y };
+  const end = getConstrainedWallChainPoint(start, targetPoint);
+  if (Math.abs(end.x - start.x) < CELL && Math.abs(end.y - start.y) < CELL) return true;
+
+  const tmpl = getWallTemplateForSegment(start, end, wallChainState.baseType);
+  const item = addItem({
+    ...tmpl,
+    id: tmpl.type,
+    roomGroup: wallChainState.roomGroup
+  });
+  setWallChainState({
+    ...wallChainState,
+    x: end.x,
+    y: end.y,
+    baseType: item.type
+  });
+  selectedId = null;
+  renderAll();
+  updateEmptyInspector('Wall drawing is active. Continue tapping/clicking points to add walls, or press Escape when finished.');
+  return true;
 }
 
 function detectInferredWallRooms() {
@@ -1336,6 +1472,7 @@ function updateGroupOutline() {
 }
 
 function toggleRoomMoveMode(forceValue) {
+  if (wallChainState) setWallChainState(null);
   roomMoveMode = typeof forceValue === 'boolean' ? forceValue : !roomMoveMode;
   roomSelectionState = null;
   groupDragState = null;
@@ -1365,7 +1502,14 @@ function renderItem(item) {
     el.addEventListener('pointerdown', ev => onItemMouseDown(ev, item.id));
     el.querySelector('.resize-handle').addEventListener('pointerdown', ev => onResizeMouseDown(ev, item.id));
     el.querySelector('.delete-btn').addEventListener('click', ev => { ev.stopPropagation(); deleteItem(item.id); });
-    el.addEventListener('click', ev => { ev.stopPropagation(); selectItem(item.id); });
+    el.addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (wallChainState) {
+        ev.preventDefault();
+        return;
+      }
+      selectItem(item.id);
+    });
   }
   el.style.left = item.x + 'px';
   el.style.top = item.y + 'px';
@@ -1455,8 +1599,14 @@ function placeSelectedPaletteArtifactAtEvent(ev) {
 function onItemMouseDown(ev, id) {
   ev.preventDefault();
   if (ev.target.classList.contains('resize-handle') || ev.target.classList.contains('delete-btn')) return;
+  const item = items.find(i => i.id === id);
+  if (wallChainState) {
+    ev.stopPropagation();
+    const corner = getNearestWallCornerFromEvent(ev, item);
+    extendWallChainToPoint(corner || getCanvasPoint(ev));
+    return;
+  }
   if (roomMoveMode) {
-    const item = items.find(i => i.id === id);
     if (item && isBackgroundArtifact(item.type)) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -1495,9 +1645,16 @@ function onItemMouseDown(ev, id) {
     if (isGroupSelected(id)) onGroupDragStart(ev);
     return;
   }
+  if (item && isWallArtifact(item.type)) {
+    const corner = getNearestWallCornerFromEvent(ev, item);
+    if (corner) {
+      ev.stopPropagation();
+      startWallChainFromCorner(ev, item, corner);
+      return;
+    }
+  }
   ev.stopPropagation();
   selectItem(id);
-  const item = items.find(i => i.id === id);
   const point = getCanvasPoint(ev);
   const startX = point.x - item.x;
   const startY = point.y - item.y;
@@ -1559,6 +1716,12 @@ function onResizeEnd() {
 }
 
 function onCanvasMouseDown(ev) {
+  if (wallChainState) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    extendWallChainToPoint(getCanvasPoint(ev));
+    return;
+  }
   if (!roomMoveMode) {
     if ((ev.target.id === 'canvas' || ev.target.id === 'gridCanvas') && placeSelectedPaletteArtifactAtEvent(ev)) {
       ev.preventDefault();
@@ -1703,6 +1866,7 @@ function clearCanvas() {
   selectedId = null;
   idCounter = 0;
   groupSelectionIds = [];
+  setWallChainState(null);
   updateGroupOutline();
   updateEmptyInspector();
   resetRenderedViews();
@@ -2332,6 +2496,10 @@ document.getElementById('floorplanFileInput').addEventListener('change', ev => {
 });
 
 document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && wallChainState) {
+    stopWallChain();
+    return;
+  }
   if (ev.key === 'Escape' && roomMoveMode) {
     toggleRoomMoveMode(false);
   }

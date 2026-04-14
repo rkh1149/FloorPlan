@@ -1745,17 +1745,6 @@ function onItemMouseDown(ev, id) {
       }
       return;
     }
-    const explicitRoomSelectionIds = getExplicitRoomGroupSelectionIds(id);
-    if (explicitRoomSelectionIds.length > 1) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (selectionMatches(explicitRoomSelectionIds)) {
-        onGroupDragStart(ev);
-      } else {
-        setGroupSelection(explicitRoomSelectionIds);
-      }
-      return;
-    }
     if (item && isWallArtifact(item.type)) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -1768,6 +1757,17 @@ function onItemMouseDown(ev, id) {
         }
         return;
       }
+    }
+    const explicitRoomSelectionIds = getExplicitRoomGroupSelectionIds(id);
+    if (explicitRoomSelectionIds.length > 1) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (selectionMatches(explicitRoomSelectionIds)) {
+        onGroupDragStart(ev);
+      } else {
+        setGroupSelection(explicitRoomSelectionIds);
+      }
+      return;
     }
     if (isGroupSelected(id)) onGroupDragStart(ev);
     return;

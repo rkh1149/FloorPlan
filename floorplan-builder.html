@@ -1409,6 +1409,14 @@ function getDirectionFromPoints(start, target) {
   return Math.abs(dx) >= Math.abs(dy) ? 'horizontal' : 'vertical';
 }
 
+function getInitialWallChainDirection(start, target, preferredDirection) {
+  const dx = Math.abs(target.x - start.x);
+  const dy = Math.abs(target.y - start.y);
+  if (preferredDirection === 'horizontal' && dx >= CELL) return 'horizontal';
+  if (preferredDirection === 'vertical' && dy >= CELL) return 'vertical';
+  return getDirectionFromPoints(start, target);
+}
+
 function getPointForWallDirection(start, target, direction) {
   return direction === 'horizontal'
     ? { x: target.x, y: start.y }
@@ -1498,7 +1506,7 @@ function onWallChainDragMove(ev) {
   const anchor = { x: wallChainState.anchorX, y: wallChainState.anchorY };
 
   if (!wallChainState.direction) {
-    const direction = getDirectionFromPoints(anchor, target);
+    const direction = getInitialWallChainDirection(anchor, target, wallChainState.sourceOrientation);
     if (!direction) return;
     wallChainState.direction = direction;
     wallChainState.extendingSource = direction === wallChainState.sourceOrientation;
@@ -1506,9 +1514,11 @@ function onWallChainDragMove(ev) {
   } else {
     const dx = target.x - anchor.x;
     const dy = target.y - anchor.y;
-    const shouldTurn = wallChainState.direction === 'horizontal'
-      ? Math.abs(dy) >= CELL && Math.abs(dy) >= Math.max(CELL, Math.abs(target.x - wallChainState.currentX))
-      : Math.abs(dx) >= CELL && Math.abs(dx) >= Math.max(CELL, Math.abs(target.y - wallChainState.currentY));
+    const shouldTurn = !wallChainState.extendingSource && (
+      wallChainState.direction === 'horizontal'
+        ? Math.abs(dy) >= CELL && Math.abs(dy) >= Math.max(CELL, Math.abs(target.x - wallChainState.currentX))
+        : Math.abs(dx) >= CELL && Math.abs(dx) >= Math.max(CELL, Math.abs(target.y - wallChainState.currentY))
+    );
 
     if (shouldTurn && wallChainState.activeItemId) {
       wallChainState.connectionItemId = wallChainState.activeItemId;

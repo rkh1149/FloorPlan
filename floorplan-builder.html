@@ -451,7 +451,6 @@ const HORIZONTAL_WALL_TYPES = new Set(['wall-h', 'ext-wall-h']);
 const VERTICAL_WALL_TYPES = new Set(['wall-v', 'ext-wall-v']);
 const WALL_SNAP_THRESHOLD_FEET = 0.6;
 const ROOM_DETECTION_TOLERANCE_FEET = 0.25;
-const WALL_CHAIN_CORNER_HIT_PX = 16;
 
 function isBackgroundArtifact(type) {
   return BACKGROUND_ARTIFACT_TYPES.has(String(type || '').trim());
@@ -1228,7 +1227,18 @@ function getNearestWallCornerFromEvent(ev, item) {
       y: snap(corner.y),
       distance: Math.hypot(pointer.x - corner.x, pointer.y - corner.y)
     }))
-    .filter(corner => corner.distance <= WALL_CHAIN_CORNER_HIT_PX)
+    .sort((a, b) => a.distance - b.distance)[0] || null;
+}
+
+function getNearestWallCorner(point) {
+  return items
+    .filter(item => isWallArtifact(item.type))
+    .flatMap(item => getWallCorners(item).map(corner => ({
+      item,
+      x: snap(corner.x),
+      y: snap(corner.y),
+      distance: Math.hypot(point.x - corner.x, point.y - corner.y)
+    })))
     .sort((a, b) => a.distance - b.distance)[0] || null;
 }
 
@@ -1257,60 +1267,134 @@ function getWallTemplateForSegment(start, end, baseType = 'wall-h') {
   };
 }
 
-function getConstrainedWallChainPoint(start, target) {
-  const dx = target.x - start.x;
-  const dy = target.y - start.y;
-  return Math.abs(dx) >= Math.abs(dy)
-    ? { x: target.x, y: start.y }
-    : { x: start.x, y: target.y };
-}
-
 function setWallChainState(nextState) {
   wallChainState = nextState;
   canvas.classList.toggle('wall-chain-active', !!wallChainState);
 }
 
 function stopWallChain() {
+  document.removeEventListener('pointermove', onWallChainDragMove);
+  document.removeEventListener('pointerup', onWallChainDragEnd);
+  document.removeEventListener('pointercancel', onWallChainDragEnd);
   setWallChainState(null);
   updateEmptyInspector();
 }
 
-function startWallChainFromCorner(ev, item, corner) {
+function startWallChainDrag(ev, item, corner) {
+  if (!item || !corner) return false;
   const groupId = item.roomGroup || `drawn-room-${++wallChainCounter}`;
   item.roomGroup = groupId;
   renderItem(item);
   setWallChainState({
-    x: corner.x,
-    y: corner.y,
+    phase: 'pending',
+    pointerStartX: ev.clientX,
+    pointerStartY: ev.clientY,
+    anchorX: corner.x,
+    anchorY: corner.y,
+    currentX: corner.x,
+    currentY: corner.y,
     roomGroup: groupId,
-    baseType: item.type
+    baseType: item.type,
+    direction: null,
+    activeItemId: null,
+    sourceItemId: item.id
   });
   selectedId = null;
-  updateEmptyInspector('Wall drawing is active. Tap or click the next point to create a connected wall segment. Press Escape when finished.');
+  updateEmptyInspector('Wall drawing is active. Keep holding and drag to create connected wall segments. Release to finish.');
+  document.addEventListener('pointermove', onWallChainDragMove);
+  document.addEventListener('pointerup', onWallChainDragEnd);
+  document.addEventListener('pointercancel', onWallChainDragEnd);
+  return true;
 }
 
-function extendWallChainToPoint(targetPoint) {
+function getDirectionFromPoints(start, target) {
+  const dx = target.x - start.x;
+  const dy = target.y - start.y;
+  if (Math.abs(dx) < CELL && Math.abs(dy) < CELL) return null;
+  return Math.abs(dx) >= Math.abs(dy) ? 'horizontal' : 'vertical';
+}
+
+function getPointForWallDirection(start, target, direction) {
+  return direction === 'horizontal'
+    ? { x: target.x, y: start.y }
+    : { x: start.x, y: target.y };
+}
+
+function updateWallChainActiveSegment(endPoint) {
   if (!wallChainState) return false;
-  const start = { x: wallChainState.x, y: wallChainState.y };
-  const end = getConstrainedWallChainPoint(start, targetPoint);
+  const start = { x: wallChainState.anchorX, y: wallChainState.anchorY };
+  const end = endPoint;
   if (Math.abs(end.x - start.x) < CELL && Math.abs(end.y - start.y) < CELL) return true;
 
   const tmpl = getWallTemplateForSegment(start, end, wallChainState.baseType);
-  const item = addItem({
-    ...tmpl,
-    id: tmpl.type,
-    roomGroup: wallChainState.roomGroup
-  });
-  setWallChainState({
-    ...wallChainState,
-    x: end.x,
-    y: end.y,
-    baseType: item.type
-  });
+  let item = items.find(entry => entry.id === wallChainState.activeItemId);
+  if (!item) {
+    item = addItem({
+      ...tmpl,
+      id: tmpl.type,
+      roomGroup: wallChainState.roomGroup
+    });
+    wallChainState.activeItemId = item.id;
+  } else {
+    const catalogEntry = getCatalogEntry(tmpl.type);
+    item.type = tmpl.type;
+    item.icon = catalogEntry?.icon || tmpl.type;
+    item.name = catalogEntry?.name || item.name;
+    item.desc = catalogEntry?.desc || item.desc;
+    item.x = tmpl.x;
+    item.y = tmpl.y;
+    item.w = tmpl.w;
+    item.h = tmpl.h;
+    item.roomGroup = wallChainState.roomGroup;
+    constrainItemToGrid(item);
+    applyWallSnap(item);
+    renderItem(item);
+  }
+  wallChainState.currentX = end.x;
+  wallChainState.currentY = end.y;
+  wallChainState.baseType = item.type;
   selectedId = null;
   renderAll();
-  updateEmptyInspector('Wall drawing is active. Continue tapping/clicking points to add walls, or press Escape when finished.');
   return true;
+}
+
+function onWallChainDragMove(ev) {
+  if (!wallChainState) return;
+  ev.preventDefault();
+  const target = getCanvasPoint(ev);
+  const anchor = { x: wallChainState.anchorX, y: wallChainState.anchorY };
+
+  if (!wallChainState.direction) {
+    const direction = getDirectionFromPoints(anchor, target);
+    if (!direction) return;
+    wallChainState.direction = direction;
+    wallChainState.phase = 'drawing';
+  } else {
+    const dx = target.x - anchor.x;
+    const dy = target.y - anchor.y;
+    const shouldTurn = wallChainState.direction === 'horizontal'
+      ? Math.abs(dy) >= CELL && Math.abs(dy) >= Math.max(CELL, Math.abs(target.x - wallChainState.currentX))
+      : Math.abs(dx) >= CELL && Math.abs(dx) >= Math.max(CELL, Math.abs(target.y - wallChainState.currentY));
+
+    if (shouldTurn && wallChainState.activeItemId) {
+      wallChainState.anchorX = wallChainState.currentX;
+      wallChainState.anchorY = wallChainState.currentY;
+      wallChainState.activeItemId = null;
+      wallChainState.direction = wallChainState.direction === 'horizontal' ? 'vertical' : 'horizontal';
+    }
+  }
+
+  const nextAnchor = { x: wallChainState.anchorX, y: wallChainState.anchorY };
+  const end = getPointForWallDirection(nextAnchor, target, wallChainState.direction);
+  updateWallChainActiveSegment(end);
+}
+
+function onWallChainDragEnd() {
+  if (!wallChainState) return;
+  const sourceItemId = wallChainState.sourceItemId;
+  const createdWall = !!wallChainState.activeItemId || wallChainState.phase === 'drawing';
+  stopWallChain();
+  if (!createdWall && sourceItemId) selectItem(sourceItemId);
 }
 
 function detectInferredWallRooms() {
@@ -1600,12 +1684,6 @@ function onItemMouseDown(ev, id) {
   ev.preventDefault();
   if (ev.target.classList.contains('resize-handle') || ev.target.classList.contains('delete-btn')) return;
   const item = items.find(i => i.id === id);
-  if (wallChainState) {
-    ev.stopPropagation();
-    const corner = getNearestWallCornerFromEvent(ev, item);
-    extendWallChainToPoint(corner || getCanvasPoint(ev));
-    return;
-  }
   if (roomMoveMode) {
     if (item && isBackgroundArtifact(item.type)) {
       ev.preventDefault();
@@ -1649,7 +1727,7 @@ function onItemMouseDown(ev, id) {
     const corner = getNearestWallCornerFromEvent(ev, item);
     if (corner) {
       ev.stopPropagation();
-      startWallChainFromCorner(ev, item, corner);
+      startWallChainDrag(ev, item, corner);
       return;
     }
   }
@@ -1716,16 +1794,19 @@ function onResizeEnd() {
 }
 
 function onCanvasMouseDown(ev) {
-  if (wallChainState) {
-    ev.preventDefault();
-    ev.stopPropagation();
-    extendWallChainToPoint(getCanvasPoint(ev));
-    return;
-  }
   if (!roomMoveMode) {
     if ((ev.target.id === 'canvas' || ev.target.id === 'gridCanvas') && placeSelectedPaletteArtifactAtEvent(ev)) {
       ev.preventDefault();
       ev.stopPropagation();
+      return;
+    }
+    if (ev.target.id === 'canvas' || ev.target.id === 'gridCanvas') {
+      const nearest = getNearestWallCorner(getCanvasPoint(ev));
+      if (nearest) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        startWallChainDrag(ev, nearest.item, nearest);
+      }
     }
     return;
   }

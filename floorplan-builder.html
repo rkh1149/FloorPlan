@@ -123,8 +123,26 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .render-lightbox-body { flex: 1; padding: 16px; display: flex; align-items: flex-start; justify-content: flex-start; background: linear-gradient(180deg, #f6efe1, #e8ddca); overflow: auto; }
 .render-lightbox-image { max-width: none; max-height: none; width: auto; height: auto; object-fit: contain; display: block; }
 
+.room-kit-modal { position: fixed; inset: 0; background: rgba(27, 22, 16, .62); z-index: 520; display: none; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(5px); }
+.room-kit-modal.visible { display: flex; }
+.room-kit-dialog { width: min(92vw, 720px); max-height: min(88vh, 840px); background: rgba(255, 250, 241, .98); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 24px 60px rgba(27, 22, 16, .32); display: flex; flex-direction: column; overflow: hidden; }
+.room-kit-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 16px 18px 12px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(247,239,226,.98), rgba(255,250,241,.92)); }
+.room-kit-title { font-family: var(--font-display); font-size: 22px; color: var(--accent); line-height: 1.1; }
+.room-kit-desc { font-size: 12px; color: var(--text2); line-height: 1.5; margin-top: 5px; }
+.room-kit-body { padding: 16px 18px; overflow: auto; display: flex; flex-direction: column; gap: 16px; }
+.room-kit-section-title { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+.room-kit-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.room-kit-check { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.34); font-size: 12px; color: var(--text2); }
+.room-kit-check input { accent-color: var(--accent); }
+.room-kit-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.room-kit-count { display: flex; flex-direction: column; gap: 5px; }
+.room-kit-count label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); }
+.room-kit-count input { background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 7px 10px; outline: none; }
+.room-kit-actions { display: flex; gap: 10px; justify-content: flex-end; padding: 12px 18px 16px; border-top: 1px solid var(--border); }
+
 @media (max-width: 1100px) {
   .render-grid { grid-template-columns: 1fr; }
+  .room-kit-checks { grid-template-columns: 1fr; }
 }
 
 /* ── Right panel: inspector ── */
@@ -270,6 +288,40 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
     </div>
   </div>
 </div>
+<div class="room-kit-modal" id="roomKitModal" onclick="closeRoomKitModal(event)">
+  <div class="room-kit-dialog" onclick="event.stopPropagation()">
+    <div class="room-kit-header">
+      <div>
+        <div class="room-kit-title" id="roomKitTitle">Room Kit</div>
+        <div class="room-kit-desc" id="roomKitDesc">Choose what to include in this room.</div>
+      </div>
+      <button class="btn secondary" onclick="closeRoomKitModal()">Close</button>
+    </div>
+    <div class="room-kit-body">
+      <div>
+        <div class="room-kit-section-title">Appliances And Furniture</div>
+        <div class="room-kit-checks" id="roomKitChecklist"></div>
+      </div>
+      <div>
+        <div class="room-kit-section-title">Openings</div>
+        <div class="room-kit-counts">
+          <div class="room-kit-count">
+            <label for="roomKitDoors">Number of doors</label>
+            <input id="roomKitDoors" type="number" min="0" max="8" step="1" value="1" />
+          </div>
+          <div class="room-kit-count">
+            <label for="roomKitWindows">Number of windows</label>
+            <input id="roomKitWindows" type="number" min="0" max="12" step="1" value="2" />
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="room-kit-actions">
+      <button class="btn secondary" onclick="closeRoomKitModal()">Cancel</button>
+      <button class="btn" onclick="createRoomKitFromModal()">Create Room</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ── Constants ──
@@ -338,6 +390,28 @@ const FLOORPLAN_RESPONSE_FORMAT = {
 
 // ── Palette catalog ──
 const CATALOG = {
+  'Room Kits': [
+    { id:'kit-kitchen', name:'Kitchen Kit', w:14, h:12, desc:'Pre-built kitchen with selectable appliances and furniture', color:'#2a2826', icon:'room', roomKit:'kitchen' },
+    { id:'kit-dining-room', name:'Dining Room Kit', w:12, h:10, desc:'Pre-built dining room with selectable furniture', color:'#2a2826', icon:'room', roomKit:'dining-room' },
+    { id:'kit-living-room', name:'Living Room Kit', w:16, h:12, desc:'Pre-built living room with selectable furniture', color:'#2a2826', icon:'room', roomKit:'living-room' },
+    { id:'kit-family-room', name:'Family Room Kit', w:16, h:14, desc:'Pre-built family room with selectable furniture', color:'#2a2826', icon:'room', roomKit:'family-room' },
+    { id:'kit-primary-bedroom', name:'Primary Bedroom Kit', w:16, h:14, desc:'Pre-built primary bedroom with selectable furniture', color:'#2a2826', icon:'room', roomKit:'primary-bedroom' },
+    { id:'kit-bedroom', name:'Bedroom Kit', w:12, h:11, desc:'Pre-built bedroom with selectable furniture', color:'#2a2826', icon:'room', roomKit:'bedroom' },
+    { id:'kit-ensuite-bathroom', name:'Ensuite Bath Kit', w:10, h:9, desc:'Pre-built ensuite bathroom with selectable fixtures', color:'#2a2826', icon:'room', roomKit:'ensuite-bathroom' },
+    { id:'kit-bathroom', name:'Bathroom Kit', w:9, h:8, desc:'Pre-built bathroom with selectable fixtures', color:'#2a2826', icon:'room', roomKit:'bathroom' },
+    { id:'kit-powder-room', name:'Powder Room Kit', w:6, h:5, desc:'Pre-built powder room with selectable fixtures', color:'#2a2826', icon:'room', roomKit:'powder-room' },
+    { id:'kit-walk-in-closet', name:'Walk-In Closet Kit', w:9, h:7, desc:'Pre-built walk-in closet with selectable storage', color:'#2a2826', icon:'room', roomKit:'walk-in-closet' },
+    { id:'kit-laundry-room', name:'Laundry Room Kit', w:9, h:7, desc:'Pre-built laundry room with selectable appliances', color:'#2a2826', icon:'room', roomKit:'laundry-room' },
+    { id:'kit-mudroom', name:'Mudroom Kit', w:8, h:7, desc:'Pre-built mudroom with selectable furniture and storage', color:'#2a2826', icon:'room', roomKit:'mudroom' },
+    { id:'kit-pantry', name:'Pantry Kit', w:6, h:6, desc:'Pre-built pantry with selectable storage', color:'#2a2826', icon:'room', roomKit:'pantry' },
+    { id:'kit-home-office', name:'Home Office Kit', w:11, h:9, desc:'Pre-built home office with selectable furniture', color:'#2a2826', icon:'room', roomKit:'home-office' },
+    { id:'kit-loft', name:'Loft Kit', w:14, h:10, desc:'Pre-built loft with selectable furniture', color:'#2a2826', icon:'loft', roomKit:'loft' },
+    { id:'kit-garage', name:'Garage Kit', w:20, h:20, desc:'Pre-built garage with selectable storage and utility items', color:'#2a2826', icon:'garage', roomKit:'garage' },
+    { id:'kit-foyer', name:'Entry / Foyer Kit', w:8, h:7, desc:'Pre-built entry or foyer with selectable furniture', color:'#2a2826', icon:'foyer', roomKit:'foyer' },
+    { id:'kit-hallway', name:'Hallway Kit', w:12, h:4, desc:'Pre-built hallway with selectable closets and doors', color:'#2a2826', icon:'hall', roomKit:'hallway' },
+    { id:'kit-utility-room', name:'Utility Room Kit', w:8, h:6, desc:'Pre-built utility or mechanical room with selectable storage', color:'#2a2826', icon:'utility', roomKit:'utility-room' },
+    { id:'kit-patio', name:'Patio / Outdoor Kit', w:14, h:10, desc:'Pre-built patio or outdoor living area', color:'#7d9a74', icon:'patio', roomKit:'patio' },
+  ],
   'Structure': [
     { id:'wall-h',   name:'Wall (H)',      w:6,  h:1,  desc:'Horizontal interior wall, 6 ft long',   color:'#5a5650', icon:'wall-h'  },
     { id:'wall-v',   name:'Wall (V)',      w:1,  h:6,  desc:'Vertical interior wall, 6 ft tall',     color:'#5a5650', icon:'wall-v'  },
@@ -425,6 +499,29 @@ const CATALOG_INDEX = Object.values(CATALOG).flat().reduce((index, entry) => {
   });
   return index;
 }, {});
+
+const ROOM_KITS = {
+  'kitchen': { name:'Kitchen', w:14, h:12, doors:1, windows:2, roomIcon:'room', items:['fridge','stove','kitchen-sink','dishwasher','counter','island','bar-stools','microwave','pantry'] },
+  'dining-room': { name:'Dining Room', w:12, h:10, doors:1, windows:2, roomIcon:'room', items:['d-table','console-table','bar-stools'] },
+  'living-room': { name:'Living Room', w:16, h:12, doors:1, windows:3, roomIcon:'room', items:['sofa','armchair','coffee-tbl','tv-unit','bookshelf','fireplace','console-table','ottoman'] },
+  'family-room': { name:'Family Room', w:16, h:14, doors:1, windows:3, roomIcon:'room', items:['sectional-sofa','loveseat','coffee-tbl','tv-unit','bookshelf','ottoman','accent-chair'] },
+  'primary-bedroom': { name:'Primary Bedroom', w:16, h:14, doors:1, windows:2, roomIcon:'room', items:['king-bed','nightstand','dresser','wardrobe','bedroom-bench','vanity-table'] },
+  'bedroom': { name:'Bedroom', w:12, h:11, doors:1, windows:1, roomIcon:'room', items:['queen-bed','nightstand','dresser','desk','wardrobe','bedroom-bench'] },
+  'ensuite-bathroom': { name:'Ensuite Bathroom', w:10, h:9, doors:1, windows:1, roomIcon:'room', items:['dbl-sink','toilet','shower','bathtub','linen-cabinet','towel-rack'] },
+  'bathroom': { name:'Bathroom', w:9, h:8, doors:1, windows:1, roomIcon:'room', items:['sink','toilet','shower','bathtub','linen-cabinet','towel-rack'] },
+  'powder-room': { name:'Powder Room', w:6, h:5, doors:1, windows:0, roomIcon:'room', items:['sink','toilet','towel-rack'] },
+  'walk-in-closet': { name:'Walk-In Closet', w:9, h:7, doors:1, windows:0, roomIcon:'closet', items:['wardrobe','closet-island','dresser','bedroom-bench','vanity-table'] },
+  'laundry-room': { name:'Laundry Room', w:9, h:7, doors:1, windows:1, roomIcon:'room', items:['washer','dryer','counter','linen-cabinet','kitchen-sink'] },
+  'mudroom': { name:'Mudroom', w:8, h:7, doors:2, windows:1, roomIcon:'mudroom', items:['bedroom-bench','wardrobe','console-table','washer','dryer'] },
+  'pantry': { name:'Pantry', w:6, h:6, doors:1, windows:0, roomIcon:'pantry', items:['bookshelf','counter','microwave'] },
+  'home-office': { name:'Home Office', w:11, h:9, doors:1, windows:2, roomIcon:'office', items:['desk','accent-chair','bookshelf','console-table','loveseat'] },
+  'loft': { name:'Loft', w:14, h:10, doors:0, windows:2, roomIcon:'loft', items:['sofa','coffee-tbl','desk','bookshelf','tv-unit','accent-chair'] },
+  'garage': { name:'Garage', w:20, h:20, doors:1, windows:1, roomIcon:'garage', items:['bookshelf','utility-room','washer','dryer','counter'] },
+  'foyer': { name:'Entry / Foyer', w:8, h:7, doors:2, windows:1, roomIcon:'foyer', items:['console-table','bedroom-bench','closet'] },
+  'hallway': { name:'Hallway', w:12, h:4, doors:3, windows:0, roomIcon:'hall', items:['closet','console-table'] },
+  'utility-room': { name:'Utility / Mechanical Room', w:8, h:6, doors:1, windows:0, roomIcon:'utility', items:['washer','dryer','bookshelf','counter'] },
+  'patio': { name:'Patio / Outdoor Living', w:14, h:10, doors:1, windows:0, roomIcon:'patio', items:['outdoor-table','outdoor-chair','plant','sliding'] }
+};
 
 function normalizeCatalogKey(value) {
   return String(value || '')
@@ -591,6 +688,8 @@ let serverApiConfigured = false;
 let selectedPaletteArtifactId = null;
 let wallChainState = null;
 let wallChainCounter = 0;
+let activeRoomKitId = null;
+let roomKitCounter = 0;
 
 // ── Build palette ──
 function setSelectedPaletteArtifact(artifactId = null) {
@@ -618,14 +717,24 @@ function buildPalette() {
       const div = document.createElement('div');
       div.className = 'artifact-item';
       div.dataset.artifactId = e.id;
-      div.draggable = true;
+      div.draggable = !e.roomKit;
       div.innerHTML = `<div class="artifact-icon">${makeIcon(e.icon, e.color)}</div><div class="artifact-name">${e.name}</div><div class="artifact-dims">${formatFeet(e.w)}×${formatFeet(e.h)} ft</div>`;
       div.addEventListener('dragstart', ev => {
+        if (e.roomKit) {
+          ev.preventDefault();
+          openRoomKitModal(e.roomKit);
+          return;
+        }
         setSelectedPaletteArtifact(null);
         ev.dataTransfer.setData('artifact', JSON.stringify(e));
       });
       div.addEventListener('click', ev => {
         ev.preventDefault();
+        if (e.roomKit) {
+          setSelectedPaletteArtifact(null);
+          openRoomKitModal(e.roomKit);
+          return;
+        }
         setSelectedPaletteArtifact(selectedPaletteArtifactId === e.id ? null : e.id);
       });
       div.title = e.desc;
@@ -633,6 +742,195 @@ function buildPalette() {
     });
     pal.appendChild(grid);
   }
+}
+
+function clampInteger(value, min, max) {
+  const numeric = Math.round(Number(value) || 0);
+  return Math.max(min, Math.min(max, numeric));
+}
+
+function getRoomKitRoomType(kitId) {
+  const typeMap = {
+    'walk-in-closet': 'closet',
+    'laundry-room': 'room',
+    'mudroom': 'mudroom',
+    'pantry': 'pantry',
+    'home-office': 'office',
+    'loft': 'loft',
+    'garage': 'garage',
+    'foyer': 'foyer',
+    'hallway': 'hallway',
+    'utility-room': 'utility-room',
+    'patio': 'patio'
+  };
+  return typeMap[kitId] || 'room';
+}
+
+function openRoomKitModal(kitId) {
+  const kit = ROOM_KITS[kitId];
+  if (!kit) return;
+  activeRoomKitId = kitId;
+  document.getElementById('roomKitTitle').textContent = `${kit.name} Kit`;
+  document.getElementById('roomKitDesc').textContent = `Typical size: ${formatFeet(kit.w)} × ${formatFeet(kit.h)} ft. Choose which items to include, then FloorCraft will place the room and contents on the grid.`;
+  document.getElementById('roomKitDoors').value = kit.doors;
+  document.getElementById('roomKitWindows').value = kit.windows;
+
+  const checklist = document.getElementById('roomKitChecklist');
+  checklist.innerHTML = kit.items.map(itemId => {
+    const entry = getCatalogEntry(itemId);
+    const label = entry?.name || itemId;
+    return `
+      <label class="room-kit-check">
+        <input type="checkbox" value="${itemId}" checked />
+        <span>${label}</span>
+      </label>
+    `;
+  }).join('');
+
+  document.getElementById('roomKitModal').classList.add('visible');
+}
+
+function closeRoomKitModal(ev) {
+  if (ev && ev.target && ev.target.id !== 'roomKitModal') return;
+  document.getElementById('roomKitModal').classList.remove('visible');
+  activeRoomKitId = null;
+}
+
+function rectsOverlapFeet(a, b) {
+  return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+}
+
+function getRoomKitPlacementCandidates(room, item) {
+  const maxX = Math.max(1, room.w - item.w - 1);
+  const maxY = Math.max(1, room.h - item.h - 1);
+  const centerX = Math.max(1, Math.round((room.w - item.w) / 2));
+  const centerY = Math.max(1, Math.round((room.h - item.h) / 2));
+  return [
+    { x: 1, y: 1 },
+    { x: maxX, y: 1 },
+    { x: 1, y: maxY },
+    { x: maxX, y: maxY },
+    { x: centerX, y: centerY },
+    { x: centerX, y: 1 },
+    { x: centerX, y: maxY },
+    { x: 1, y: centerY },
+    { x: maxX, y: centerY }
+  ];
+}
+
+function findRoomKitItemPosition(room, item, placedRects) {
+  const candidates = getRoomKitPlacementCandidates(room, item);
+  for (const candidate of candidates) {
+    const rect = {
+      left: room.x + candidate.x,
+      top: room.y + candidate.y,
+      right: room.x + candidate.x + item.w,
+      bottom: room.y + candidate.y + item.h
+    };
+    if (rect.right <= room.x + room.w - 0.5 &&
+      rect.bottom <= room.y + room.h - 0.5 &&
+      !placedRects.some(existing => rectsOverlapFeet(rect, existing))) {
+      return { x: rect.left, y: rect.top, rect };
+    }
+  }
+
+  for (let y = 1; y <= Math.max(1, room.h - item.h - 1); y += 1) {
+    for (let x = 1; x <= Math.max(1, room.w - item.w - 1); x += 1) {
+      const rect = { left: room.x + x, top: room.y + y, right: room.x + x + item.w, bottom: room.y + y + item.h };
+      if (!placedRects.some(existing => rectsOverlapFeet(rect, existing))) {
+        return { x: rect.left, y: rect.top, rect };
+      }
+    }
+  }
+
+  const fallbackX = room.x + Math.max(1, Math.round((room.w - item.w) / 2));
+  const fallbackY = room.y + Math.max(1, Math.round((room.h - item.h) / 2));
+  const rect = { left: fallbackX, top: fallbackY, right: fallbackX + item.w, bottom: fallbackY + item.h };
+  return { x: fallbackX, y: fallbackY, rect };
+}
+
+function addRoomKitOpening(type, index, room, groupId) {
+  const isDoor = type === 'door';
+  const horizontal = index % 2 === 0;
+  const sideSlot = Math.floor(index / 2);
+  const itemWidth = isDoor ? 3 : 4;
+  const color = isDoor ? '#7a6a50' : '#4a6a7a';
+  const name = isDoor ? 'Door' : 'Window';
+  const desc = isDoor ? 'Room kit door' : 'Room kit window';
+
+  if (horizontal) {
+    const maxX = Math.max(1, room.w - itemWidth - 1);
+    const x = room.x + Math.min(maxX, 2 + sideSlot * 4);
+    const y = index % 4 === 0 ? room.y + room.h - 1 : room.y;
+    return addItem({ type, name, desc, icon:type, x:x * CELL, y:y * CELL, w:itemWidth, h:1, color, roomGroup:groupId, z:2 });
+  }
+
+  const maxY = Math.max(1, room.h - itemWidth - 1);
+  const y = room.y + Math.min(maxY, 2 + sideSlot * 4);
+  const x = index % 4 === 1 ? room.x : room.x + room.w - 1;
+  return addItem({ type, name, desc, icon:type, x:x * CELL, y:y * CELL, w:1, h:itemWidth, color, roomGroup:groupId, z:2 });
+}
+
+function createRoomKit(kitId, selectedItemIds, doorCount, windowCount) {
+  const kit = ROOM_KITS[kitId];
+  if (!kit) return;
+  const roomX = Math.max(0, Math.round((gridWidth - kit.w) / 2));
+  const roomY = Math.max(0, Math.round((gridHeight - kit.h) / 2));
+  const room = { x: roomX, y: roomY, w: Math.min(kit.w, gridWidth), h: Math.min(kit.h, gridHeight) };
+  const groupId = `room-kit-${kitId}-${++roomKitCounter}`;
+  const roomType = getRoomKitRoomType(kitId);
+  const roomEntry = getCatalogEntry(roomType);
+
+  const roomItem = addItem({
+    type: roomType,
+    name: kit.name,
+    desc: `${kit.name} room kit`,
+    icon: kit.roomIcon || roomEntry?.icon || 'room',
+    x: room.x * CELL,
+    y: room.y * CELL,
+    w: room.w,
+    h: room.h,
+    color: roomEntry?.color || '#2a2826',
+    roomGroup: groupId,
+    z: 0
+  });
+
+  const placedRects = [];
+  selectedItemIds.forEach(itemId => {
+    const entry = getCatalogEntry(itemId);
+    if (!entry) return;
+    const itemSize = {
+      w: Math.min(entry.w, Math.max(1, room.w - 2)),
+      h: Math.min(entry.h, Math.max(1, room.h - 2))
+    };
+    const placement = findRoomKitItemPosition(room, itemSize, placedRects);
+    placedRects.push(placement.rect);
+    addItem({
+      ...entry,
+      x: placement.x * CELL,
+      y: placement.y * CELL,
+      w: itemSize.w,
+      h: itemSize.h,
+      roomGroup: groupId,
+      z: 2
+    });
+  });
+
+  for (let i = 0; i < doorCount; i += 1) addRoomKitOpening('door', i, room, groupId);
+  for (let i = 0; i < windowCount; i += 1) addRoomKitOpening('window', i, room, groupId);
+
+  selectedId = roomItem.id;
+  renderAll();
+  updateInspector(roomItem);
+}
+
+function createRoomKitFromModal() {
+  if (!activeRoomKitId) return;
+  const selectedItemIds = Array.from(document.querySelectorAll('#roomKitChecklist input:checked')).map(input => input.value);
+  const doorCount = clampInteger(document.getElementById('roomKitDoors').value, 0, 8);
+  const windowCount = clampInteger(document.getElementById('roomKitWindows').value, 0, 12);
+  createRoomKit(activeRoomKitId, selectedItemIds, doorCount, windowCount);
+  closeRoomKitModal();
 }
 
 // ── Grid canvas ──

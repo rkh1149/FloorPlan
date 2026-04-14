@@ -1242,6 +1242,51 @@ function getNearestWallCorner(point) {
     .sort((a, b) => a.distance - b.distance)[0] || null;
 }
 
+function getWallRectSnapshot(item) {
+  return {
+    x: item.x,
+    y: item.y,
+    w: item.w,
+    h: item.h,
+    left: item.x,
+    top: item.y,
+    right: item.x + item.w * CELL,
+    bottom: item.y + item.h * CELL
+  };
+}
+
+function getSourceWallFixedEdge(rect, anchor, direction) {
+  if (direction === 'horizontal') {
+    return Math.abs(anchor.x - rect.left) <= Math.abs(anchor.x - rect.right) ? rect.right : rect.left;
+  }
+  return Math.abs(anchor.y - rect.top) <= Math.abs(anchor.y - rect.bottom) ? rect.bottom : rect.top;
+}
+
+function snapWallExtensionEnd(start, end, direction, sourceItemId) {
+  const thresholdPx = WALL_SNAP_THRESHOLD_FEET * CELL;
+  const candidates = [];
+  items
+    .filter(item => item.id !== sourceItemId && isWallArtifact(item.type))
+    .forEach(item => {
+      const rect = getItemRect(item);
+      if (direction === 'horizontal') {
+        const wallSpansY = start.y >= rect.top - thresholdPx && start.y <= rect.bottom + thresholdPx;
+        if (wallSpansY) candidates.push(rect.left, rect.right);
+      } else {
+        const wallSpansX = start.x >= rect.left - thresholdPx && start.x <= rect.right + thresholdPx;
+        if (wallSpansX) candidates.push(rect.top, rect.bottom);
+      }
+    });
+
+  const snapped = direction === 'horizontal'
+    ? snapValueToCandidates(end.x, candidates, thresholdPx)
+    : snapValueToCandidates(end.y, candidates, thresholdPx);
+
+  return direction === 'horizontal'
+    ? { x: snapped, y: end.y }
+    : { x: end.x, y: snapped };
+}
+
 function getTemplateRectInPixels(tmpl) {
   return {
     left: tmpl.x,
@@ -1344,7 +1389,10 @@ function startWallChainDrag(ev, item, corner) {
     direction: null,
     activeItemId: null,
     connectionItemId: item.id,
-    sourceItemId: item.id
+    sourceItemId: item.id,
+    sourceOrientation: getWallOrientation(item),
+    sourceStartRect: getWallRectSnapshot(item),
+    extendingSource: false
   });
   selectedId = null;
   updateEmptyInspector('Wall drawing is active. Keep holding and drag to create connected wall segments. Release to finish.');
@@ -1370,8 +1418,45 @@ function getPointForWallDirection(start, target, direction) {
 function updateWallChainActiveSegment(endPoint) {
   if (!wallChainState) return false;
   const start = { x: wallChainState.anchorX, y: wallChainState.anchorY };
-  const end = endPoint;
+  const end = wallChainState.extendingSource
+    ? snapWallExtensionEnd(start, endPoint, wallChainState.direction, wallChainState.sourceItemId)
+    : endPoint;
   if (Math.abs(end.x - start.x) < CELL && Math.abs(end.y - start.y) < CELL) return true;
+
+  if (wallChainState.extendingSource) {
+    const item = items.find(entry => entry.id === wallChainState.sourceItemId);
+    const startRect = wallChainState.sourceStartRect;
+    if (!item || !startRect) return false;
+
+    if (wallChainState.direction === 'horizontal') {
+      const fixedX = getSourceWallFixedEdge(startRect, start, 'horizontal');
+      const left = Math.min(fixedX, end.x);
+      const right = Math.max(fixedX, end.x);
+      item.x = snap(left);
+      item.y = startRect.y;
+      item.w = Math.max(1, roundToFootPrecision((right - left) / CELL));
+      item.h = startRect.h;
+    } else {
+      const fixedY = getSourceWallFixedEdge(startRect, start, 'vertical');
+      const top = Math.min(fixedY, end.y);
+      const bottom = Math.max(fixedY, end.y);
+      item.x = startRect.x;
+      item.y = snap(top);
+      item.w = startRect.w;
+      item.h = Math.max(1, roundToFootPrecision((bottom - top) / CELL));
+    }
+
+    item.roomGroup = wallChainState.roomGroup;
+    constrainItemToGrid(item);
+    renderItem(item);
+    wallChainState.activeItemId = item.id;
+    wallChainState.connectionItemId = item.id;
+    wallChainState.currentX = end.x;
+    wallChainState.currentY = end.y;
+    selectedId = null;
+    renderAll();
+    return true;
+  }
 
   const previousItem = items.find(entry => entry.id === wallChainState.connectionItemId);
   const tmpl = getWallTemplateForSegment(start, end, wallChainState.baseType, previousItem);
@@ -1416,6 +1501,7 @@ function onWallChainDragMove(ev) {
     const direction = getDirectionFromPoints(anchor, target);
     if (!direction) return;
     wallChainState.direction = direction;
+    wallChainState.extendingSource = direction === wallChainState.sourceOrientation;
     wallChainState.phase = 'drawing';
   } else {
     const dx = target.x - anchor.x;
@@ -1429,6 +1515,7 @@ function onWallChainDragMove(ev) {
       wallChainState.anchorX = wallChainState.currentX;
       wallChainState.anchorY = wallChainState.currentY;
       wallChainState.activeItemId = null;
+      wallChainState.extendingSource = false;
       wallChainState.direction = wallChainState.direction === 'horizontal' ? 'vertical' : 'horizontal';
     }
   }

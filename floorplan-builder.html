@@ -1267,6 +1267,17 @@ function getWallTemplateForSegment(start, end, baseType = 'wall-h') {
   };
 }
 
+function getWallSegmentEndpoint(item, start) {
+  const rect = getItemRect(item);
+  return getWallCorners(item)
+    .filter(corner => !(corner.x === start.x && corner.y === start.y))
+    .sort((a, b) => {
+      const aDistance = Math.hypot(a.x - start.x, a.y - start.y);
+      const bDistance = Math.hypot(b.x - start.x, b.y - start.y);
+      return bDistance - aDistance;
+    })[0] || { x: rect.right, y: rect.bottom };
+}
+
 function setWallChainState(nextState) {
   wallChainState = nextState;
   canvas.classList.toggle('wall-chain-active', !!wallChainState);
@@ -1332,7 +1343,8 @@ function updateWallChainActiveSegment(endPoint) {
     item = addItem({
       ...tmpl,
       id: tmpl.type,
-      roomGroup: wallChainState.roomGroup
+      roomGroup: wallChainState.roomGroup,
+      skipWallSnap: true
     });
     wallChainState.activeItemId = item.id;
   } else {
@@ -1347,11 +1359,11 @@ function updateWallChainActiveSegment(endPoint) {
     item.h = tmpl.h;
     item.roomGroup = wallChainState.roomGroup;
     constrainItemToGrid(item);
-    applyWallSnap(item);
     renderItem(item);
   }
-  wallChainState.currentX = end.x;
-  wallChainState.currentY = end.y;
+  const segmentEndpoint = getWallSegmentEndpoint(item, start);
+  wallChainState.currentX = segmentEndpoint.x;
+  wallChainState.currentY = segmentEndpoint.y;
   wallChainState.baseType = item.type;
   selectedId = null;
   renderAll();
@@ -1661,7 +1673,7 @@ function addItem(tmpl) {
     z: Number.isFinite(Number(tmpl.z)) ? Number(tmpl.z) : (isBackgroundArtifact(tmpl.type || tmpl.id || catalogEntry?.id) ? 0 : 1),
   };
   constrainItemToGrid(item);
-  applyWallSnap(item);
+  if (!tmpl.skipWallSnap) applyWallSnap(item);
   items.push(item);
   renderItem(item);
   selectItem(item.id);

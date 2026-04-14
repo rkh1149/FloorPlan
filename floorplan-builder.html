@@ -800,6 +800,52 @@ function rectsOverlapFeet(a, b) {
   return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
 }
 
+function getItemRectFeet(item) {
+  return {
+    left: roundToFootPrecision(item.x / CELL),
+    top: roundToFootPrecision(item.y / CELL),
+    right: roundToFootPrecision(item.x / CELL + item.w),
+    bottom: roundToFootPrecision(item.y / CELL + item.h)
+  };
+}
+
+function isRoomKitAreaOpen(x, y, w, h) {
+  const rect = { left: x, top: y, right: x + w, bottom: y + h };
+  return !items.some(item => rectsOverlapFeet(rect, getItemRectFeet(item)));
+}
+
+function findOpenRoomKitPlacement(width, height) {
+  const w = Math.min(width, gridWidth);
+  const h = Math.min(height, gridHeight);
+  const maxX = Math.max(0, gridWidth - w);
+  const maxY = Math.max(0, gridHeight - h);
+  const centerX = Math.round(maxX / 2);
+  const centerY = Math.round(maxY / 2);
+
+  if (isRoomKitAreaOpen(centerX, centerY, w, h)) {
+    return { x: centerX, y: centerY, w, h };
+  }
+
+  const candidates = [];
+  for (let y = 0; y <= maxY; y += 1) {
+    for (let x = 0; x <= maxX; x += 1) {
+      if (!isRoomKitAreaOpen(x, y, w, h)) continue;
+      candidates.push({
+        x,
+        y,
+        distance: Math.hypot(x - centerX, y - centerY)
+      });
+    }
+  }
+
+  if (candidates.length) {
+    const best = candidates.sort((a, b) => a.distance - b.distance || a.y - b.y || a.x - b.x)[0];
+    return { x: best.x, y: best.y, w, h };
+  }
+
+  return null;
+}
+
 function getRoomKitPlacementCandidates(room, item) {
   const maxX = Math.max(1, room.w - item.w - 1);
   const maxY = Math.max(1, room.h - item.h - 1);
@@ -874,9 +920,11 @@ function addRoomKitOpening(type, index, room, groupId) {
 function createRoomKit(kitId, selectedItemIds, doorCount, windowCount) {
   const kit = ROOM_KITS[kitId];
   if (!kit) return;
-  const roomX = Math.max(0, Math.round((gridWidth - kit.w) / 2));
-  const roomY = Math.max(0, Math.round((gridHeight - kit.h) / 2));
-  const room = { x: roomX, y: roomY, w: Math.min(kit.w, gridWidth), h: Math.min(kit.h, gridHeight) };
+  const room = findOpenRoomKitPlacement(kit.w, kit.h);
+  if (!room) {
+    alert(`There is not enough open space on the grid to place a ${kit.name} kit.\nTry increasing the grid size or moving existing artifacts first.`);
+    return;
+  }
   const groupId = `room-kit-${kitId}-${++roomKitCounter}`;
   const roomType = getRoomKitRoomType(kitId);
   const roomEntry = getCatalogEntry(roomType);

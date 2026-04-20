@@ -93,24 +93,18 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .room-selection-box { position: absolute; border: 1px dashed var(--accent3); background: rgba(122, 158, 181, .12); pointer-events: none; z-index: 60; display: none; }
 .room-group-outline { position: absolute; border: 2px dashed var(--accent); background: rgba(200, 169, 110, .08); pointer-events: auto; cursor: grab; z-index: 55; display: none; touch-action: none; }
 .room-group-outline::after { content: attr(data-label); position: absolute; top: -24px; left: 0; background: var(--surface); border: 1px solid var(--border2); border-radius: 999px; color: var(--accent); font-size: 10px; line-height: 1; padding: 5px 8px; white-space: nowrap; }
-.view3d-panel { position: absolute; inset: 18px 18px 18px 42px; background: linear-gradient(145deg, rgba(255,250,241,.98), rgba(236,226,207,.96)); border: 1px solid var(--border2); border-radius: 12px; z-index: 245; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(12px); }
-.view3d-panel.visible { display: flex; }
-.view3d-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(247,239,226,.98), rgba(255,250,241,.92)); }
-.view3d-title { font-family: var(--font-display); font-size: 18px; color: var(--accent); }
-.view3d-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.view3d-note { padding: 10px 16px 0; font-size: 11px; color: var(--text3); }
-.view3d-viewport { position: relative; flex: 1; margin: 14px 16px 16px; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: radial-gradient(circle at 50% 26%, rgba(255,255,255,.95), rgba(247,239,226,.55) 32%, rgba(213,199,174,.42) 78%), linear-gradient(180deg, #fffaf1, #dfd0b5); cursor: grab; perspective: 1400px; touch-action: none; }
-.view3d-viewport.dragging { cursor: grabbing; }
-.view3d-scene { position: absolute; left: 50%; top: 50%; transform-style: preserve-3d; transition: transform .12s ease-out; }
-.view3d-floor { position: absolute; left: 0; top: 0; transform-style: preserve-3d; background-color: rgba(255,250,241,.82); background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px), linear-gradient(var(--grid-strong) 1px, transparent 1px), linear-gradient(90deg, var(--grid-strong) 1px, transparent 1px); background-size: var(--cell) var(--cell), var(--cell) var(--cell), calc(var(--cell) * 5) calc(var(--cell) * 5), calc(var(--cell) * 5) calc(var(--cell) * 5); border: 1px solid rgba(157,132,88,.28); box-shadow: 0 28px 65px rgba(82,62,35,.22); transform-style: preserve-3d; }
-.view3d-block { position: absolute; transform-style: preserve-3d; }
-.view3d-face { position: absolute; left: 0; top: 0; border: 1px solid rgba(61,46,29,.24); backface-visibility: hidden; overflow: hidden; }
-.view3d-top { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: linear-gradient(145deg, rgba(255,255,255,.35), rgba(255,255,255,.02)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); }
-.view3d-top svg { width: 46%; height: 46%; min-width: 18px; min-height: 18px; max-width: 90px; max-height: 90px; filter: drop-shadow(0 2px 3px rgba(61,46,29,.18)); }
-.view3d-name { max-width: 92%; font-size: 9px; line-height: 1.1; color: var(--text); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 0 rgba(255,255,255,.75); }
-.view3d-dims { font-family: var(--font-mono); font-size: 7px; line-height: 1.1; color: var(--text2); text-align: center; white-space: nowrap; }
-.view3d-front, .view3d-side { background: color-mix(in srgb, currentColor 76%, #1b1610); opacity: .86; }
-.view3d-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; font-size: 13px; color: var(--text3); line-height: 1.6; }
+.canvas-wrap.view3d-mode { perspective: 1600px; perspective-origin: 50% 42%; background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.95), rgba(247,239,226,.58) 34%, rgba(213,199,174,.48) 78%), var(--bg); }
+.canvas-wrap.view3d-mode #canvas { transform-style: preserve-3d; transition: transform .12s ease-out; cursor: grab; overflow: visible; touch-action: none; user-select: none; }
+.canvas-wrap.view3d-mode.dragging #canvas { cursor: grabbing; }
+.canvas-wrap.view3d-mode .grid-bg { transform: translateZ(0); box-shadow: 0 26px 60px rgba(82,62,35,.22); }
+.canvas-wrap.view3d-mode .floor-item { transform-style: preserve-3d; pointer-events: none; }
+.canvas-wrap.view3d-mode .floor-item .item-body { transform: translateZ(var(--pop-height, 24px)); filter: drop-shadow(0 20px 18px rgba(60, 45, 28, .22)); }
+.canvas-wrap.view3d-mode .floor-item .item-icon { box-shadow: inset 0 0 0 1px rgba(255,255,255,.35), 0 14px 24px rgba(90,72,50,.2); }
+.canvas-wrap.view3d-mode .floor-item .resize-handle,
+.canvas-wrap.view3d-mode .floor-item .delete-btn { display: none; }
+.view3d-controls { position: absolute; top: 48px; right: 18px; z-index: 120; display: none; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border2); border-radius: 999px; background: rgba(255,250,241,.94); box-shadow: 0 12px 28px rgba(90,72,50,.16); backdrop-filter: blur(10px); color: var(--text2); font-size: 11px; }
+.canvas-wrap.view3d-mode .view3d-controls { display: flex; }
+.view3d-controls .btn { padding: 5px 10px; font-size: 10px; }
 .render-panel { position: absolute; inset: 18px 18px 18px 42px; background: rgba(255, 250, 241, .96); border: 1px solid var(--border2); border-radius: 12px; z-index: 250; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(12px); }
 .render-panel.visible { display: flex; }
 .render-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(247,239,226,.98), rgba(255,250,241,.92)); }
@@ -265,21 +259,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
     <div class="loading-sub" id="loadingSub">Interpreting description</div>
   </div>
   <div class="scale-badge" id="scaleBadge">1 cell = 1 ft</div>
-  <div class="view3d-panel" id="view3dPanel">
-    <div class="view3d-header">
-      <div class="view3d-title">3D View</div>
-      <div class="view3d-actions">
-        <button class="btn secondary" onclick="reset3DView()">Reset Angle</button>
-        <button class="btn secondary" onclick="close3DView()">Close</button>
-      </div>
-    </div>
-    <div class="view3d-note">Drag inside the view to rotate the floor plan. This is a live 3D interpretation of the artifacts currently on the grid.</div>
-    <div class="view3d-viewport" id="view3dViewport">
-      <div class="view3d-scene" id="view3dScene">
-        <div class="view3d-floor" id="view3dFloor"></div>
-      </div>
-      <div class="view3d-empty" id="view3dEmpty" style="display:none">Add artifacts to the grid, then open 3D View to see them pop up from the floor plan.</div>
-    </div>
+  <div class="view3d-controls" id="view3dControls">
+    <span>3D View: drag grid to rotate</span>
+    <button class="btn secondary" onclick="reset3DView()">Reset</button>
+    <button class="btn secondary" onclick="close3DView()">Exit 3D</button>
   </div>
   <div class="render-panel" id="renderPanel">
     <div class="render-panel-header">
@@ -1215,86 +1198,56 @@ function get3DHeightForItem(item) {
 }
 
 function get3DSceneScale() {
-  const viewport = document.getElementById('view3dViewport');
-  if (!viewport) return 0.75;
+  const viewport = document.querySelector('.canvas-wrap');
+  if (!viewport) return 0.82;
   const planWidth = Math.max(1, gridWidth * CELL);
   const planHeight = Math.max(1, gridHeight * CELL);
-  const availableWidth = Math.max(260, viewport.clientWidth - 120);
-  const availableHeight = Math.max(220, viewport.clientHeight - 120);
-  return Math.max(0.18, Math.min(0.95, availableWidth / planWidth, availableHeight / planHeight));
+  const availableWidth = Math.max(260, viewport.clientWidth - 140);
+  const availableHeight = Math.max(220, viewport.clientHeight - 140);
+  return Math.max(0.35, Math.min(0.88, availableWidth / planWidth, availableHeight / planHeight));
 }
 
 function update3DSceneTransform() {
-  const scene = document.getElementById('view3dScene');
-  if (!scene) return;
+  const liveCanvas = document.getElementById('canvas');
+  if (!liveCanvas) return;
+  if (!view3DVisible) {
+    liveCanvas.style.transform = '';
+    liveCanvas.style.transformOrigin = '';
+    return;
+  }
   const scale = get3DSceneScale();
-  scene.style.transform = `translate(-50%, -50%) rotateX(${view3DRotationX}deg) rotateZ(${view3DRotationZ}deg) scale(${scale})`;
+  liveCanvas.style.transformOrigin = 'center center';
+  liveCanvas.style.transform = `rotateX(${view3DRotationX}deg) rotateZ(${view3DRotationZ}deg) scale(${scale})`;
 }
 
-function build3DBlock(item) {
-  const width = item.w * CELL;
-  const depth = item.h * CELL;
-  const height = get3DHeightForItem(item);
-  const color = item.color || '#3a3830';
-  const topColor = lightenHex(color, isBackgroundArtifact(item.type) ? 74 : 34);
-  const frontColor = darkenHex(color, 22);
-  const sideColor = darkenHex(color, 34);
-  const icon = makeIcon(item.icon || item.type, color);
-  const block = document.createElement('div');
-  block.className = 'view3d-block';
-  block.style.left = item.x + 'px';
-  block.style.top = item.y + 'px';
-  block.style.width = width + 'px';
-  block.style.height = depth + 'px';
-  block.style.transform = 'translateZ(0)';
-  block.style.zIndex = resolveItemZ(item);
-  block.style.color = color;
-  block.innerHTML = `
-    <div class="view3d-face view3d-top" style="width:${width}px;height:${depth}px;background:${topColor};transform:translateZ(${height}px)">
-      ${icon}
-      <div class="view3d-name">${escapeXml(item.name)}</div>
-      <div class="view3d-dims">${escapeXml(`${formatFeet(item.w)} × ${formatFeet(item.h)} ft`)}</div>
-    </div>
-    <div class="view3d-face view3d-front" style="width:${width}px;height:${height}px;top:${depth}px;background:${frontColor};transform-origin:top;transform:rotateX(-90deg)"></div>
-    <div class="view3d-face view3d-side" style="width:${height}px;height:${depth}px;left:${width}px;background:${sideColor};transform-origin:left;transform:rotateY(90deg)"></div>
-  `;
-  return block;
-}
-
-function render3DView() {
-  const panel = document.getElementById('view3dPanel');
-  const floor = document.getElementById('view3dFloor');
-  const empty = document.getElementById('view3dEmpty');
-  if (!panel || !floor || !empty) return;
-
-  floor.innerHTML = '';
-  floor.style.width = (gridWidth * CELL) + 'px';
-  floor.style.height = (gridHeight * CELL) + 'px';
-  floor.style.setProperty('--cell', CELL + 'px');
-  empty.style.display = items.length ? 'none' : 'flex';
-
-  items
-    .slice()
-    .sort((a, b) => resolveItemZ(a) - resolveItemZ(b))
-    .forEach(item => {
-      floor.appendChild(build3DBlock(item));
-    });
-
-  update3DSceneTransform();
+function update3DButton() {
+  const btn = document.getElementById('view3dBtn');
+  if (!btn) return;
+  btn.classList.toggle('active', view3DVisible);
+  btn.textContent = view3DVisible ? 'Exit 3D View' : '3D View';
 }
 
 function open3DView() {
+  if (!items.length) {
+    updateEmptyInspector('Add artifacts to the grid, then use 3D View to make them pop up from the floor plan.');
+  }
+  if (wallChainState) stopWallChain();
+  if (roomMoveMode) toggleRoomMoveMode(false);
   view3DVisible = true;
   closeRenderPanel();
-  document.getElementById('view3dPanel').classList.add('visible');
-  render3DView();
+  document.querySelector('.canvas-wrap').classList.add('view3d-mode');
+  renderAll();
+  update3DSceneTransform();
+  update3DButton();
 }
 
 function close3DView() {
   view3DVisible = false;
-  document.getElementById('view3dPanel').classList.remove('visible');
   view3DDragState = null;
-  document.getElementById('view3dViewport').classList.remove('dragging');
+  const wrap = document.querySelector('.canvas-wrap');
+  if (wrap) wrap.classList.remove('view3d-mode', 'dragging');
+  update3DSceneTransform();
+  update3DButton();
 }
 
 function toggle3DView() {
@@ -1312,14 +1265,17 @@ function reset3DView() {
 }
 
 function on3DPointerDown(ev) {
+  if (!view3DVisible) return;
+  if (ev.target.closest('.view3d-controls, .render-panel, .loading-overlay')) return;
   ev.preventDefault();
+  ev.stopPropagation();
   view3DDragState = {
     startX: ev.clientX,
     startY: ev.clientY,
     rotationX: view3DRotationX,
     rotationZ: view3DRotationZ
   };
-  document.getElementById('view3dViewport').classList.add('dragging');
+  document.querySelector('.canvas-wrap').classList.add('dragging');
   document.addEventListener('pointermove', on3DPointerMove);
   document.addEventListener('pointerup', on3DPointerEnd);
   document.addEventListener('pointercancel', on3DPointerEnd);
@@ -1336,7 +1292,8 @@ function on3DPointerMove(ev) {
 
 function on3DPointerEnd() {
   view3DDragState = null;
-  document.getElementById('view3dViewport').classList.remove('dragging');
+  const wrap = document.querySelector('.canvas-wrap');
+  if (wrap) wrap.classList.remove('dragging');
   document.removeEventListener('pointermove', on3DPointerMove);
   document.removeEventListener('pointerup', on3DPointerEnd);
   document.removeEventListener('pointercancel', on3DPointerEnd);
@@ -2270,6 +2227,7 @@ function renderItem(item) {
   el.style.width = item.w * CELL + 'px';
   el.style.height = item.h * CELL + 'px';
   el.style.zIndex = resolveItemZ(item);
+  el.style.setProperty('--pop-height', get3DHeightForItem(item) + 'px');
   el.classList.toggle('selected', item.id === selectedId);
   el.classList.toggle('grouped', isGroupSelected(item.id));
   const body = el.querySelector('.item-body');
@@ -2285,7 +2243,7 @@ function renderItem(item) {
 
 function renderAll() {
   items.forEach(renderItem);
-  if (view3DVisible) render3DView();
+  if (view3DVisible) update3DSceneTransform();
 }
 
 // ── Drag from palette ──
@@ -3293,9 +3251,9 @@ window.addEventListener('resize', () => {
   drawGrid();
   drawRulers();
   updateGroupOutline();
-  if (view3DVisible) render3DView();
+  if (view3DVisible) update3DSceneTransform();
 });
-document.getElementById('view3dViewport').addEventListener('pointerdown', on3DPointerDown);
+canvasWrap.addEventListener('pointerdown', on3DPointerDown, true);
 setTimeout(() => {
   updateCanvasSize();
   drawGrid();

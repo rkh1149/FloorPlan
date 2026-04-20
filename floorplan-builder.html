@@ -76,6 +76,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .floor-item .item-body { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 9px; color: var(--text2); text-align: center; line-height: 1.2; transition: transform .15s; position: relative; overflow: visible; padding: 2px; }
 .floor-item .item-icon { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,.38), rgba(255,255,255,0) 45%), linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0)); box-shadow: 0 10px 18px rgba(90, 72, 50, .12); }
 .floor-item .item-icon svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 3px rgba(61, 46, 29, .18)); }
+.floor-item .item-side { display: none; position: absolute; pointer-events: none; backface-visibility: hidden; }
 .floor-item.selected .item-icon { box-shadow: 0 0 0 2px var(--accent), 0 12px 22px rgba(90, 72, 50, .18); }
 .floor-item .resize-handle { position: absolute; bottom: 1px; right: 1px; width: 10px; height: 10px; cursor: se-resize; opacity: 0; transition: opacity .15s; touch-action: none; }
 .floor-item:hover .resize-handle, .floor-item.selected .resize-handle { opacity: 1; }
@@ -98,8 +99,17 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .canvas-wrap.view3d-mode.dragging #canvas { cursor: grabbing; }
 .canvas-wrap.view3d-mode .grid-bg { transform: translateZ(0); box-shadow: 0 26px 60px rgba(82,62,35,.22); }
 .canvas-wrap.view3d-mode .floor-item { transform-style: preserve-3d; pointer-events: none; }
-.canvas-wrap.view3d-mode .floor-item .item-body { transform: translateZ(var(--pop-height, 24px)); filter: drop-shadow(0 20px 18px rgba(60, 45, 28, .22)); }
+.canvas-wrap.view3d-mode .floor-item .item-body { z-index: 2; transform: translateZ(var(--pop-height, 24px)); background: var(--top-color, rgba(255,255,255,.35)); border: 1px solid var(--top-stroke, rgba(61,46,29,.24)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 18px 22px rgba(60,45,28,.18); }
 .canvas-wrap.view3d-mode .floor-item .item-icon { box-shadow: inset 0 0 0 1px rgba(255,255,255,.35), 0 14px 24px rgba(90,72,50,.2); }
+.canvas-wrap.view3d-mode .floor-item .item-side { display: block; background: linear-gradient(145deg, var(--side-color, #7a6a50), var(--side-shadow-color, #3a3024)); border: 1px solid rgba(61,46,29,.22); opacity: .92; }
+.canvas-wrap.view3d-mode .floor-item .item-side-front { left: 0; top: 100%; width: 100%; height: var(--pop-height, 24px); transform-origin: center top; transform: rotateX(-90deg); }
+.canvas-wrap.view3d-mode .floor-item .item-side-back { left: 0; top: 0; width: 100%; height: var(--pop-height, 24px); transform-origin: center top; transform: translateY(calc(-1 * var(--pop-height, 24px))) rotateX(-90deg); background: var(--side-shadow-color, #3a3024); }
+.canvas-wrap.view3d-mode .floor-item .item-side-right { left: 100%; top: 0; width: var(--pop-height, 24px); height: 100%; transform-origin: left center; transform: rotateY(90deg); }
+.canvas-wrap.view3d-mode .floor-item .item-side-left { left: 0; top: 0; width: var(--pop-height, 24px); height: 100%; transform-origin: left center; transform: translateX(calc(-1 * var(--pop-height, 24px))) rotateY(90deg); background: var(--side-shadow-color, #3a3024); }
+.canvas-wrap.view3d-mode .floor-item.is-wall .item-body { border-radius: 5px; }
+.canvas-wrap.view3d-mode .floor-item.is-wall .item-icon { border-radius: 5px; }
+.canvas-wrap.view3d-mode .floor-item.is-background .item-body { opacity: .76; border-style: dashed; }
+.canvas-wrap.view3d-mode .floor-item.is-opening .item-body { opacity: .88; }
 .canvas-wrap.view3d-mode .floor-item .resize-handle,
 .canvas-wrap.view3d-mode .floor-item .delete-btn { display: none; }
 .view3d-controls { position: absolute; top: 48px; right: 18px; z-index: 120; display: none; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border2); border-radius: 999px; background: rgba(255,250,241,.94); box-shadow: 0 12px 28px rgba(90,72,50,.16); backdrop-filter: blur(10px); color: var(--text2); font-size: 11px; }
@@ -260,9 +270,9 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   </div>
   <div class="scale-badge" id="scaleBadge">1 cell = 1 ft</div>
   <div class="view3d-controls" id="view3dControls">
-    <span>3D View: drag grid to rotate</span>
+    <span>Dollhouse View: drag grid to rotate</span>
     <button class="btn secondary" onclick="reset3DView()">Reset</button>
-    <button class="btn secondary" onclick="close3DView()">Exit 3D</button>
+    <button class="btn secondary" onclick="close3DView()">Exit</button>
   </div>
   <div class="render-panel" id="renderPanel">
     <div class="render-panel-header">
@@ -575,6 +585,10 @@ function isWallArtifact(type) {
   return HORIZONTAL_WALL_TYPES.has(String(type || '').trim()) || VERTICAL_WALL_TYPES.has(String(type || '').trim());
 }
 
+function isOpeningArtifact(type) {
+  return ['door', 'window', 'sliding'].includes(String(type || '').trim());
+}
+
 function getWallOrientation(itemOrType) {
   const type = typeof itemOrType === 'string' ? itemOrType : itemOrType?.type;
   if (HORIZONTAL_WALL_TYPES.has(String(type || '').trim())) return 'horizontal';
@@ -709,7 +723,7 @@ let wallChainCounter = 0;
 let activeRoomKitId = null;
 let roomKitCounter = 0;
 let view3DVisible = false;
-let view3DRotationX = 58;
+let view3DRotationX = 62;
 let view3DRotationZ = -34;
 let view3DDragState = null;
 
@@ -1188,13 +1202,50 @@ function closeRenderPanel() {
 }
 
 function get3DHeightForItem(item) {
-  if (isWallArtifact(item.type)) return Math.max(32, CELL * 1.7);
-  if (isBackgroundArtifact(item.type)) return Math.max(8, CELL * 0.4);
-  if (['door', 'window', 'sliding'].includes(item.type)) return Math.max(14, CELL * 0.75);
+  if (isWallArtifact(item.type)) return Math.max(54, CELL * 2.8);
+  if (isBackgroundArtifact(item.type)) return Math.max(7, CELL * 0.35);
+  if (item.type === 'window') return Math.max(34, CELL * 1.7);
+  if (['door', 'sliding'].includes(item.type)) return Math.max(26, CELL * 1.3);
   if (['king-bed', 'queen-bed', 'twin-bed', 'bunk-bed', 'sofa', 'sectional-sofa', 'loveseat'].includes(item.type)) return Math.max(24, CELL * 1.25);
-  if (['fridge', 'wardrobe', 'bookshelf', 'linen-cabinet'].includes(item.type)) return Math.max(42, CELL * 2.1);
-  if (['stove', 'dishwasher', 'washer', 'dryer', 'counter', 'island'].includes(item.type)) return Math.max(28, CELL * 1.35);
-  return Math.max(20, CELL);
+  if (['fridge', 'wardrobe', 'bookshelf', 'linen-cabinet'].includes(item.type)) return Math.max(46, CELL * 2.3);
+  if (['stove', 'dishwasher', 'washer', 'dryer', 'counter', 'island', 'closet-island'].includes(item.type)) return Math.max(30, CELL * 1.5);
+  if (['toilet', 'sink', 'shower', 'bathtub', 'dbl-sink'].includes(item.type)) return Math.max(24, CELL * 1.2);
+  if (item.type === 'stairs') return Math.max(38, CELL * 1.9);
+  return Math.max(22, CELL * 1.1);
+}
+
+function get3DColorsForItem(item) {
+  const color = /^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : '#3a3830';
+  if (isBackgroundArtifact(item.type)) {
+    return {
+      top: lightenHex(color, 72),
+      stroke: lightenHex(color, 34),
+      side: lightenHex(color, 28),
+      shadow: darkenHex(color, 4)
+    };
+  }
+  if (isWallArtifact(item.type)) {
+    return {
+      top: lightenHex(color, 58),
+      stroke: darkenHex(color, 18),
+      side: lightenHex(color, 16),
+      shadow: darkenHex(color, 28)
+    };
+  }
+  if (isOpeningArtifact(item.type)) {
+    return {
+      top: lightenHex(color, 64),
+      stroke: darkenHex(color, 18),
+      side: lightenHex(color, 20),
+      shadow: darkenHex(color, 24)
+    };
+  }
+  return {
+    top: lightenHex(color, 38),
+    stroke: darkenHex(color, 18),
+    side: darkenHex(color, 8),
+    shadow: darkenHex(color, 30)
+  };
 }
 
 function get3DSceneScale() {
@@ -1224,12 +1275,12 @@ function update3DButton() {
   const btn = document.getElementById('view3dBtn');
   if (!btn) return;
   btn.classList.toggle('active', view3DVisible);
-  btn.textContent = view3DVisible ? 'Exit 3D View' : '3D View';
+  btn.textContent = view3DVisible ? 'Exit Dollhouse' : '3D View';
 }
 
 function open3DView() {
   if (!items.length) {
-    updateEmptyInspector('Add artifacts to the grid, then use 3D View to make them pop up from the floor plan.');
+    updateEmptyInspector('Add artifacts to the grid, then use 3D View to see an overhead dollhouse view with height and depth.');
   }
   if (wallChainState) stopWallChain();
   if (roomMoveMode) toggleRoomMoveMode(false);
@@ -1259,7 +1310,7 @@ function toggle3DView() {
 }
 
 function reset3DView() {
-  view3DRotationX = 58;
+  view3DRotationX = 62;
   view3DRotationZ = -34;
   update3DSceneTransform();
 }
@@ -2208,7 +2259,7 @@ function renderItem(item) {
     el = document.createElement('div');
     el.className = 'floor-item';
     el.id = 'item-' + item.id;
-    el.innerHTML = `<div class="item-body"><div class="item-icon"></div><div class="item-meta"><div class="item-name"></div><div class="item-dims"></div></div></div><div class="resize-handle"></div><div class="delete-btn">×</div>`;
+    el.innerHTML = `<div class="item-body"><div class="item-icon"></div><div class="item-meta"><div class="item-name"></div><div class="item-dims"></div></div></div><div class="item-side item-side-front"></div><div class="item-side item-side-back"></div><div class="item-side item-side-right"></div><div class="item-side item-side-left"></div><div class="resize-handle"></div><div class="delete-btn">×</div>`;
     document.getElementById('canvas').appendChild(el);
     el.addEventListener('pointerdown', ev => onItemMouseDown(ev, item.id));
     el.querySelector('.resize-handle').addEventListener('pointerdown', ev => onResizeMouseDown(ev, item.id));
@@ -2227,9 +2278,17 @@ function renderItem(item) {
   el.style.width = item.w * CELL + 'px';
   el.style.height = item.h * CELL + 'px';
   el.style.zIndex = resolveItemZ(item);
+  const view3DColors = get3DColorsForItem(item);
   el.style.setProperty('--pop-height', get3DHeightForItem(item) + 'px');
+  el.style.setProperty('--top-color', view3DColors.top);
+  el.style.setProperty('--top-stroke', view3DColors.stroke);
+  el.style.setProperty('--side-color', view3DColors.side);
+  el.style.setProperty('--side-shadow-color', view3DColors.shadow);
   el.classList.toggle('selected', item.id === selectedId);
   el.classList.toggle('grouped', isGroupSelected(item.id));
+  el.classList.toggle('is-wall', isWallArtifact(item.type));
+  el.classList.toggle('is-background', isBackgroundArtifact(item.type));
+  el.classList.toggle('is-opening', isOpeningArtifact(item.type));
   const body = el.querySelector('.item-body');
   body.style.color = item.color || '#3a3830';
   const icon = el.querySelector('.item-icon');

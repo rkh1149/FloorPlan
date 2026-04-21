@@ -95,22 +95,22 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .room-selection-box { position: absolute; border: 1px dashed var(--accent3); background: rgba(122, 158, 181, .12); pointer-events: none; z-index: 60; display: none; }
 .room-group-outline { position: absolute; border: 2px dashed var(--accent); background: rgba(200, 169, 110, .08); pointer-events: auto; cursor: grab; z-index: 55; display: none; touch-action: none; }
 .room-group-outline::after { content: attr(data-label); position: absolute; top: -24px; left: 0; background: var(--surface); border: 1px solid var(--border2); border-radius: 999px; color: var(--accent); font-size: 10px; line-height: 1; padding: 5px 8px; white-space: nowrap; }
-.canvas-wrap.view3d-mode { perspective: 1600px; perspective-origin: 50% 42%; background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.95), rgba(247,239,226,.58) 34%, rgba(213,199,174,.48) 78%), var(--bg); }
-.canvas-wrap.view3d-mode #canvas { transform-style: preserve-3d; transition: transform .12s ease-out; cursor: grab; overflow: visible; touch-action: none; user-select: none; }
+.canvas-wrap.view3d-mode { perspective: 1800px; -webkit-perspective: 1800px; perspective-origin: 50% 42%; -webkit-perspective-origin: 50% 42%; background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.95), rgba(247,239,226,.58) 34%, rgba(213,199,174,.48) 78%), var(--bg); }
+.canvas-wrap.view3d-mode #canvas { transform-style: preserve-3d; -webkit-transform-style: preserve-3d; transition: transform .12s ease-out; cursor: grab; overflow: visible; touch-action: none; user-select: none; }
 .canvas-wrap.view3d-mode.dragging #canvas { cursor: grabbing; }
-.canvas-wrap.view3d-mode .grid-bg { transform: translateZ(0); box-shadow: 0 26px 60px rgba(82,62,35,.22); }
-.canvas-wrap.view3d-mode .floor-item { transform-style: preserve-3d; pointer-events: none; isolation: isolate; }
-.canvas-wrap.view3d-mode .floor-item .item-shadow { display: block; inset: 8% 10%; background: radial-gradient(circle at 50% 50%, rgba(44,32,20,.34), rgba(44,32,20,.12) 55%, rgba(44,32,20,0) 78%); transform: translateZ(2px) translateY(10px); filter: blur(8px); }
-.canvas-wrap.view3d-mode .floor-item .item-body { position: absolute; inset: 0; z-index: 2; transform-style: preserve-3d; transform: translateZ(var(--pop-height, 24px)); background: linear-gradient(145deg, var(--top-highlight-color, rgba(255,255,255,.55)), var(--top-color, rgba(255,255,255,.35)) 42%, var(--top-shadow-color, rgba(61,46,29,.12)) 100%); border: 1px solid var(--top-stroke, rgba(61,46,29,.24)); border-radius: var(--volume-radius, 12px); box-shadow: inset 0 1px 0 rgba(255,255,255,.4), inset 0 0 0 1px rgba(255,255,255,.16), 0 22px 30px rgba(60,45,28,.18); }
+.canvas-wrap.view3d-mode .grid-bg { transform: translate3d(0, 0, -2px); -webkit-transform: translate3d(0, 0, -2px); box-shadow: 0 26px 60px rgba(82,62,35,.22); }
+.canvas-wrap.view3d-mode .floor-item { transform-style: preserve-3d; -webkit-transform-style: preserve-3d; pointer-events: none; isolation: isolate; }
+.canvas-wrap.view3d-mode .floor-item .item-shadow { display: block; inset: 8% 10%; background: radial-gradient(circle at 50% 50%, rgba(44,32,20,.34), rgba(44,32,20,.12) 55%, rgba(44,32,20,0) 78%); transform: translate3d(0, 10px, 2px); -webkit-transform: translate3d(0, 10px, 2px); filter: blur(8px); }
+.canvas-wrap.view3d-mode .floor-item .item-body { position: absolute; inset: 0; z-index: 2; transform-style: preserve-3d; -webkit-transform-style: preserve-3d; transform: translate3d(0, 0, var(--pop-height, 24px)); -webkit-transform: translate3d(0, 0, var(--pop-height, 24px)); background: linear-gradient(145deg, var(--top-highlight-color, rgba(255,255,255,.55)), var(--top-color, rgba(255,255,255,.35)) 42%, var(--top-shadow-color, rgba(61,46,29,.12)) 100%); border: 1px solid var(--top-stroke, rgba(61,46,29,.24)); border-radius: var(--volume-radius, 12px); box-shadow: inset 0 1px 0 rgba(255,255,255,.4), inset 0 0 0 1px rgba(255,255,255,.16), 0 22px 30px rgba(60,45,28,.18); }
 .canvas-wrap.view3d-mode .floor-item .item-body::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(135deg, rgba(255,255,255,.36), rgba(255,255,255,0) 55%, rgba(53,38,22,.14)); pointer-events: none; }
 .canvas-wrap.view3d-mode .floor-item .item-icon { position: absolute; inset: var(--icon-inset, 12%); width: auto; height: auto; border-radius: calc(var(--volume-radius, 12px) - 4px); padding: 6%; background: linear-gradient(180deg, rgba(255,255,255,.42), rgba(255,255,255,.12)); border: 1px solid rgba(255,255,255,.28); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), 0 12px 18px rgba(90,72,50,.18); }
 .canvas-wrap.view3d-mode .floor-item .item-icon svg { filter: drop-shadow(0 4px 4px rgba(61,46,29,.2)); }
 .canvas-wrap.view3d-mode .floor-item .item-meta { display: none; }
-.canvas-wrap.view3d-mode .floor-item .item-side { display: block; position: absolute; backface-visibility: hidden; background: linear-gradient(145deg, var(--side-color, #7a6a50), var(--side-shadow-color, #3a3024)); border: 1px solid rgba(61,46,29,.22); opacity: .96; }
-.canvas-wrap.view3d-mode .floor-item .item-side-front { left: 0; top: 100%; width: 100%; height: var(--pop-height, 24px); transform-origin: center top; transform: rotateX(90deg); }
-.canvas-wrap.view3d-mode .floor-item .item-side-back { left: 0; top: 0; width: 100%; height: var(--pop-height, 24px); transform-origin: center top; transform: translateZ(var(--pop-height, 24px)) rotateX(-90deg); background: linear-gradient(145deg, var(--side-shadow-color, #3a3024), var(--side-color, #7a6a50)); }
-.canvas-wrap.view3d-mode .floor-item .item-side-right { left: 100%; top: 0; width: var(--pop-height, 24px); height: 100%; transform-origin: left center; transform: rotateY(-90deg); }
-.canvas-wrap.view3d-mode .floor-item .item-side-left { left: 0; top: 0; width: var(--pop-height, 24px); height: 100%; transform-origin: left center; transform: translateZ(var(--pop-height, 24px)) rotateY(90deg); background: linear-gradient(145deg, var(--side-shadow-color, #3a3024), var(--side-color, #7a6a50)); }
+.canvas-wrap.view3d-mode .floor-item .item-side { display: block; position: absolute; transform-style: preserve-3d; -webkit-transform-style: preserve-3d; backface-visibility: hidden; -webkit-backface-visibility: hidden; background: linear-gradient(145deg, var(--side-color, #7a6a50), var(--side-shadow-color, #3a3024)); border: 1px solid rgba(61,46,29,.22); opacity: .96; }
+.canvas-wrap.view3d-mode .floor-item .item-side-front { left: 0; top: 100%; width: 100%; height: var(--pop-height, 24px); transform-origin: center top; -webkit-transform-origin: center top; transform: rotateX(90deg); -webkit-transform: rotateX(90deg); }
+.canvas-wrap.view3d-mode .floor-item .item-side-back { left: 0; top: 0; width: 100%; height: var(--pop-height, 24px); transform-origin: center top; -webkit-transform-origin: center top; transform: translate3d(0, 0, var(--pop-height, 24px)) rotateX(-90deg); -webkit-transform: translate3d(0, 0, var(--pop-height, 24px)) rotateX(-90deg); background: linear-gradient(145deg, var(--side-shadow-color, #3a3024), var(--side-color, #7a6a50)); }
+.canvas-wrap.view3d-mode .floor-item .item-side-right { left: 100%; top: 0; width: var(--pop-height, 24px); height: 100%; transform-origin: left center; -webkit-transform-origin: left center; transform: rotateY(-90deg); -webkit-transform: rotateY(-90deg); }
+.canvas-wrap.view3d-mode .floor-item .item-side-left { left: 0; top: 0; width: var(--pop-height, 24px); height: 100%; transform-origin: left center; -webkit-transform-origin: left center; transform: translate3d(0, 0, var(--pop-height, 24px)) rotateY(90deg); -webkit-transform: translate3d(0, 0, var(--pop-height, 24px)) rotateY(90deg); background: linear-gradient(145deg, var(--side-shadow-color, #3a3024), var(--side-color, #7a6a50)); }
 .canvas-wrap.view3d-mode .floor-item.is-wall .item-body { border-radius: 5px; }
 .canvas-wrap.view3d-mode .floor-item.is-wall .item-icon { border-radius: 5px; }
 .canvas-wrap.view3d-mode .floor-item.is-background .item-body { opacity: .9; border-style: solid; }
@@ -744,8 +744,8 @@ let wallChainCounter = 0;
 let activeRoomKitId = null;
 let roomKitCounter = 0;
 let view3DVisible = false;
-let view3DRotationX = 68;
-let view3DRotationZ = -30;
+let view3DRotationX = 54;
+let view3DRotationZ = -28;
 let view3DDragState = null;
 
 // ── Build palette ──
@@ -1223,16 +1223,16 @@ function closeRenderPanel() {
 }
 
 function get3DHeightForItem(item) {
-  if (isWallArtifact(item.type)) return Math.max(54, CELL * 2.8);
+  if (isWallArtifact(item.type)) return Math.max(88, CELL * 4.4);
   if (isBackgroundArtifact(item.type)) return Math.max(7, CELL * 0.35);
-  if (item.type === 'window') return Math.max(34, CELL * 1.7);
-  if (['door', 'sliding'].includes(item.type)) return Math.max(26, CELL * 1.3);
-  if (['king-bed', 'queen-bed', 'twin-bed', 'bunk-bed', 'sofa', 'sectional-sofa', 'loveseat'].includes(item.type)) return Math.max(24, CELL * 1.25);
-  if (['fridge', 'wardrobe', 'bookshelf', 'linen-cabinet'].includes(item.type)) return Math.max(46, CELL * 2.3);
-  if (['stove', 'dishwasher', 'washer', 'dryer', 'counter', 'island', 'closet-island'].includes(item.type)) return Math.max(30, CELL * 1.5);
-  if (['toilet', 'sink', 'shower', 'bathtub', 'dbl-sink'].includes(item.type)) return Math.max(24, CELL * 1.2);
-  if (item.type === 'stairs') return Math.max(38, CELL * 1.9);
-  return Math.max(22, CELL * 1.1);
+  if (item.type === 'window') return Math.max(58, CELL * 2.9);
+  if (['door', 'sliding'].includes(item.type)) return Math.max(72, CELL * 3.6);
+  if (['king-bed', 'queen-bed', 'twin-bed', 'bunk-bed', 'sofa', 'sectional-sofa', 'loveseat'].includes(item.type)) return Math.max(42, CELL * 2.1);
+  if (['fridge', 'wardrobe', 'bookshelf', 'linen-cabinet'].includes(item.type)) return Math.max(70, CELL * 3.5);
+  if (['stove', 'dishwasher', 'washer', 'dryer', 'counter', 'island', 'closet-island'].includes(item.type)) return Math.max(52, CELL * 2.6);
+  if (['toilet', 'sink', 'shower', 'bathtub', 'dbl-sink'].includes(item.type)) return Math.max(38, CELL * 1.9);
+  if (item.type === 'stairs') return Math.max(64, CELL * 3.2);
+  return Math.max(34, CELL * 1.7);
 }
 
 function get3DColorsForItem(item) {
@@ -1341,7 +1341,7 @@ function update3DSceneTransform() {
   }
   const scale = get3DSceneScale();
   liveCanvas.style.transformOrigin = 'center center';
-  liveCanvas.style.transform = `rotateX(${view3DRotationX}deg) rotateZ(${view3DRotationZ}deg) scale(${scale})`;
+  liveCanvas.style.transform = `perspective(1800px) rotateX(${view3DRotationX}deg) rotateZ(${view3DRotationZ}deg) scale(${scale})`;
 }
 
 function update3DButton() {
@@ -1383,8 +1383,8 @@ function toggle3DView() {
 }
 
 function reset3DView() {
-  view3DRotationX = 68;
-  view3DRotationZ = -30;
+  view3DRotationX = 54;
+  view3DRotationZ = -28;
   update3DSceneTransform();
 }
 
